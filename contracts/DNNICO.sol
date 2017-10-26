@@ -417,9 +417,7 @@ contract DNNICO {
         require(this.balance != 0);
 
         // Attempt to transfer funds
-        if (!dnnHoldingMultisig.transfer(this.balance)) {
-            revert();
-        }
+        dnnHoldingMultisig.transfer(this.balance);  
     }
 
 
