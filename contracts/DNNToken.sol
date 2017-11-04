@@ -11,9 +11,9 @@ contract DNNToken is StandardToken {
 
     using SafeMath for uint256;
 
-    /////////////////////////////////////////////////////////////
-    // Used to indicate which allocation we issues tokens from //
-    /////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////
+    // Used to indicate which allocation we issue tokens from //
+    ////////////////////////////////////////////////////////////
     enum DNNSupplyAllocations {
         EarlyBackerSupplyAllocation,
         PREICOSupplyAllocation,
@@ -86,10 +86,10 @@ contract DNNToken is StandardToken {
     ////////////////////////////////////////////////////////////
     modifier CofoundersTokensVested()
     {
-        // Make sure that a starting vesting date has been set and of 4 weeks have passed since vesting date
+        // Make sure that a starting vesting date has been set and 4 weeks have passed since vesting date
         require (cofoundersSupplyVestingStartDate != 0 && (now-cofoundersSupplyVestingStartDate) >= 4 weeks);
 
-        // Get current tranched based on the amount of time that has passed since vesting start date
+        // Get current tranche based on the amount of time that has passed since vesting start date
         uint256 currentTranche = now.sub(cofoundersSupplyVestingStartDate) / 4 weeks;
 
         // Amount of tranches that have been issued so far
@@ -325,7 +325,7 @@ contract DNNToken is StandardToken {
             advisorySupplyRemaining = advisorySupplyRemaining.sub(tokenCount);
         }
 
-        // Platform (Also makes sure that the beneficiary is the platform address speciied in this contract)
+        // Platform (Also makes sure that the beneficiary is the platform address specified in this contract)
         else if (beneficiary == platform && allocationType == DNNSupplyAllocations.PlatformSupplyAllocation && tokenCount <= platformSupplyRemaining) {
             platformSupplyRemaining = platformSupplyRemaining.sub(tokenCount);
         }

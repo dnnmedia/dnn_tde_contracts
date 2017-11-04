@@ -130,25 +130,25 @@ contract DNNICO {
        _;
     }
 
-    //////////////////////////////////////
-    // Check if the pre-ico is going on //
-    //////////////////////////////////////
+    //////////////////////////////////
+    // Check if the ico is going on //
+    //////////////////////////////////
     modifier ICOHasNotEnded() {
        require (now < ICOEndDate);
        _;
     }
 
-    //////////////////////////////////////
-    // Check if the pre-ico is going on //
-    //////////////////////////////////////
+    ////////////////////////////////s
+    // Check if the ico has ended //
+    ////////////////////////////////
     modifier ICOHasEnded() {
        require (now >= ICOEndDate || fundsRaisedInWei >= maximumFundingGoalInETH);
        _;
     }
 
-    /////////////////////////////////////////////////////////////
-    // User has to send at least the ether value of one token. //
-    /////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////
+    // Checksto see if the contribution is at least the minimum allowed for ico //
+    //////////////////////////////////////////////////////////////////////////////
     modifier ContributionIsAtLeastMinimum() {
         require (msg.value >= minimumICOContributionInWei);
         _;
@@ -158,8 +158,8 @@ contract DNNICO {
     // Make sure max cap is not exceeded with added contribution //
     ///////////////////////////////////////////////////////////////
     modifier ContributionDoesNotCauseGoalExceedance() {
-       uint256 newContractBalance = msg.value+fundsRaisedInWei;
-       require (newContractBalance <= maximumFundingGoalInETH && fundsRaisedInWei < maximumFundingGoalInETH);
+       uint256 newFundsRaised = msg.value+fundsRaisedInWei;
+       require (newFundsRaised <= maximumFundingGoalInETH && fundsRaisedInWei < maximumFundingGoalInETH);
        _;
     }
 
