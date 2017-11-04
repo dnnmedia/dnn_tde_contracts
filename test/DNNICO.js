@@ -444,7 +444,7 @@ contract("DNNICO", function(accounts) {
 
       });
 
-      it("finalizePREICO() + finalizeICO() + unlockTokens()Tests ending PRE-ICO and ICO", async () => {
+      it("finalizePREICO() + finalizeICO() + unlockTokens(): Tests ending PRE-ICO and ICO", async () => {
 
             // Deploy new token contract
             const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
@@ -481,7 +481,7 @@ contract("DNNICO", function(accounts) {
 
       });
 
-      it("Tests cofounder vesting schedule", async () => {
+      it("issueCofoundersTokensIfPossible(): Tests cofounder vesting schedule", async () => {
 
               // Deploy new token contract
               const token = await DNNToken.new(cofounderA, cofounderB, platform, 0, {from: multisig, gas: gasAmount});
@@ -502,7 +502,7 @@ contract("DNNICO", function(accounts) {
                   try {
                     await token.issueCofoundersTokensIfPossible({from: cofounderA, gas: gasAmount});
                   } catch(e) {}
-                  
+
                   let cofoundersSupplyVestingTranchesIssued = await token.cofoundersSupplyVestingTranchesIssued.call();
                   let cofoundersSupplyDistributed = await token.cofoundersSupplyDistributed.call();
                   assert.equal(cofoundersSupplyVestingTranchesIssued.toNumber(), month, (month) + " Month(s) should have been issued");
