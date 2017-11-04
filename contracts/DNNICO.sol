@@ -479,6 +479,9 @@ contract DNNICO {
        onlyCofounders
        ICOHasEnded
     {
+        // Check if the tokens are either locked or we have tokens to transfer
+        require(dnnToken.tokensLocked() == true || dnnToken.ICOSupplyRemaining() > 0);
+
         // Unlock tokens
         dnnToken.unlockTokens();
 
@@ -494,6 +497,9 @@ contract DNNICO {
        onlyCofounders
        NoPREICOContributorsAwaitingTokens
     {
+        // Check if we have tokens to transfer to ICO
+        require(dnnToken.PREICOSupplyRemaining() > 0);
+
         // Transfer unsold ICO tokens to platform
         dnnToken.sendUnsoldPREICOTokensToICO();
     }
