@@ -21,7 +21,6 @@ contract DNNToken is StandardToken {
         BountySupplyAllocation,
         WriterAccountSupplyAllocation,
         AdvisorySupplyAllocation,
-        CofoundersSupplyAllocation,
         PlatformSupplyAllocation
     }
 
@@ -72,7 +71,8 @@ contract DNNToken is StandardToken {
     ////////////////////////////////////////////////////////////////////////////////////
     // Amount of CoFounder Supply that has been distributed based on vesting schedule //
     ////////////////////////////////////////////////////////////////////////////////////
-    uint256 public cofoundersSupplyVestingIntervals = 10;
+    uint256 public cofoundersSupplyVestingTranches = 10;
+    uint256 public cofoundersSupplyVestingTranchesIssued = 0;
     uint256 public cofoundersSupplyVestingStartDate; // Epoch
     uint256 public cofoundersSupplyDistributed = 0;  // # of atto-DNN distributed to founders
 
@@ -86,32 +86,23 @@ contract DNNToken is StandardToken {
     ////////////////////////////////////////////////////////////
     modifier CofoundersTokensVested()
     {
-        // Make sure that a starting vesting date has been set
-        require (cofoundersSupplyVestingStartDate != 0);
+        // Make sure that a starting vesting date has been set and of 4 weeks have passed since vesting date
+        require (cofoundersSupplyVestingStartDate != 0 && (now-cofoundersSupplyVestingStartDate) >= 4 weeks);
 
-        // Amount of time that has passed since the cofounder vesting start date
-        uint256 timePassed = now.sub(cofoundersSupplyVestingStartDate);
+        // Get current tranched based on the amount of time that has passed since vesting start date
+        uint256 currentTranche = now.sub(cofoundersSupplyVestingStartDate) / 4 weeks;
 
-        // Amount of scheduled intervals remaining for cofounder token issuance
-        uint256 scheduledIntervalsLeft = cofoundersSupplyRemaining.div(cofoundersSupply.div(cofoundersSupplyVestingIntervals));
+        // Amount of tranches that have been issued so far
+        uint256 issuedTranches = cofoundersSupplyVestingTranchesIssued;
+
+        // Amount of tranches that cofounders are entitled to
+        uint256 maxTranches = cofoundersSupplyVestingTranches;
 
         // Make sure that we still have unvested tokens and that
-        // the tokens for the current interval have not been issued.
-        require (
-                  (scheduledIntervalsLeft > 0)  &&
+        // the tokens for the current tranche have not been issued.
+        require (issuedTranches != maxTranches && currentTranche > issuedTranches);
 
-                  ((timePassed >= 10*30 days && scheduledIntervalsLeft == 1) ||
-                  (timePassed >= 9*30 days && scheduledIntervalsLeft == 2)  ||
-                  (timePassed >= 8*30 days && scheduledIntervalsLeft == 3)  ||
-                  (timePassed >= 7*30 days && scheduledIntervalsLeft == 4)   ||
-                  (timePassed >= 6*30 days && scheduledIntervalsLeft == 5)   ||
-                  (timePassed >= 5*30 days && scheduledIntervalsLeft == 6)   ||
-                  (timePassed >= 4*30 days && scheduledIntervalsLeft == 7)   ||
-                  (timePassed >= 3*30 days && scheduledIntervalsLeft == 8)   ||
-                  (timePassed >= 2*30 days && scheduledIntervalsLeft == 9)   ||
-                  (timePassed >= 1*30 days && scheduledIntervalsLeft == 10))
-              );
-          _;
+        _;
     }
 
     ///////////////////////////////////
@@ -159,21 +150,21 @@ contract DNNToken is StandardToken {
         _;
     }
 
+    /////////////////////////////////////////////////////////////////////
+    // Checks to see if we are allowed to change the allocator address //
+    /////////////////////////////////////////////////////////////////////
+    modifier CanSetAllocator()
+    {
+       require (allocator == address(0x0) || tokensLocked == false);
+       _;
+    }
+
     //////////////////////////////////////////////////
     // Checks if Allocator is performing the action //
     //////////////////////////////////////////////////
     modifier onlyAllocator()
     {
         require (msg.sender == allocator);
-        _;
-    }
-
-    /////////////////////////////////////////////////
-    // Checks if platform is performing the action //
-    /////////////////////////////////////////////////
-    modifier onlyPlatform()
-    {
-        require (msg.sender == platform);
         _;
     }
 
@@ -187,12 +178,13 @@ contract DNNToken is StandardToken {
         platform = newAddress;
     }
 
-    /////////////////////////////////////////////////////////////////////////////
-    //  @des Function to change address that is allowed to do token issuance.  //
-    //  @param newAddress Address of new issuance contract.                    //
-    /////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  @des Function to change address that is allowed to do token issuance. Allocator can only be set once.  //
+    //  @param newAddress Address of new issuance contract.                                                    //
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function changeAllocator(address newAddress)
         onlyCofounders
+        CanSetAllocator
     {
         allocator = newAddress;
     }
@@ -250,7 +242,7 @@ contract DNNToken is StandardToken {
         returns (bool)
     {
         // Compute total amount of vested tokens to issue
-        uint256 tokenCount = cofoundersSupply.div(cofoundersSupplyVestingIntervals);
+        uint256 tokenCount = cofoundersSupply.div(cofoundersSupplyVestingTranches);
 
         // Make sure that there are cofounder tokens left
         if (tokenCount > cofoundersSupplyRemaining) {
@@ -266,6 +258,10 @@ contract DNNToken is StandardToken {
         // Split tokens between both founders
         balances[cofounderA] = balances[cofounderA].add(tokenCount.div(2));
         balances[cofounderB] = balances[cofounderB].add(tokenCount.div(2));
+
+        // Update that a tranche has been issued
+        cofoundersSupplyVestingTranchesIssued += 1;
+
         return true;
     }
 
@@ -329,8 +325,8 @@ contract DNNToken is StandardToken {
             advisorySupplyRemaining = advisorySupplyRemaining.sub(tokenCount);
         }
 
-        // Platform
-        else if (allocationType == DNNSupplyAllocations.PlatformSupplyAllocation && tokenCount <= platformSupplyRemaining) {
+        // Platform (Also makes sure that the beneficiary is the platform address speciied in this contract)
+        else if (beneficiary == platform && allocationType == DNNSupplyAllocations.PlatformSupplyAllocation && tokenCount <= platformSupplyRemaining) {
             platformSupplyRemaining = platformSupplyRemaining.sub(tokenCount);
         }
 
@@ -351,6 +347,9 @@ contract DNNToken is StandardToken {
       external
       onlyAllocator
     {
+        // Make sure we have tokens to send from ICO
+        require(ICOSupplyRemaining > 0);
+
         // Add remaining ico tokens to platform remaining tokens
         platformSupplyRemaining = platformSupplyRemaining.add(ICOSupplyRemaining);
 
@@ -358,13 +357,16 @@ contract DNNToken is StandardToken {
         ICOSupplyRemaining = 0;
     }
 
-    /////////////////////////////////////////////////
-    // Transfer Unsold tokens from ICO to Platform //
-    /////////////////////////////////////////////////
+    /////////////////////////////////////////////////////
+    // Transfer Unsold tokens from pre-ICO to Platform //
+    /////////////////////////////////////////////////////
     function sendUnsoldPREICOTokensToICO()
       external
       onlyAllocator
     {
+        // Make sure we have tokens to send from pre-ICO
+        require(PREICOSupplyRemaining > 0);
+
         // Add remaining pre-ico tokens to ico remaining tokens
         ICOSupplyRemaining = ICOSupplyRemaining.add(PREICOSupplyRemaining);
 
@@ -379,17 +381,23 @@ contract DNNToken is StandardToken {
         external
         onlyAllocator
     {
+        // Make sure tokens are currently locked before proceeding to unlock them
+        require(tokensLocked == true);
+
         tokensLocked = false;
     }
 
     ///////////////////////////////////////////////////////////////////////
     //  @des Contract constructor function sets initial token balances.  //
     ///////////////////////////////////////////////////////////////////////
-    function DNNToken(address founderA, address founderB, uint256 vestingStartDate)
+    function DNNToken(address founderA, address founderB, address platformAddress, uint256 vestingStartDate)
     {
           // Set cofounder addresses
           cofounderA = founderA;
           cofounderB = founderB;
+
+          // Sets platform address
+          platform = platformAddress;
 
           // Set total supply - 1 Billion DNN Tokens = (1,000,000,000 * 10^18) atto-DNN
           // 1 DNN = 10^18 atto-DNN
@@ -415,7 +423,7 @@ contract DNNToken is StandardToken {
           cofoundersSupplyRemaining = cofoundersSupply;
           platformSupplyRemaining = platformSupply;
 
-          // Sets cofounder vesting start date
-          cofoundersSupplyVestingStartDate = vestingStartDate;
+          // Sets cofounder vesting start date (Ensures that it is a date in the future, otherwise it will default to now)
+          cofoundersSupplyVestingStartDate = vestingStartDate >= now ? vestingStartDate : now;
     }
 }

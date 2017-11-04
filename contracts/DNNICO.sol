@@ -55,7 +55,7 @@ contract DNNICO {
     //////////////////////
     // Funding Hard cap //
     //////////////////////
-    uint256 public maximumFundingGoalInWei;
+    uint256 public maximumFundingGoalInETH;
 
     //////////////////
     // Funds Raised //
@@ -68,11 +68,35 @@ contract DNNICO {
     mapping(address => uint256) ETHContributions;
 
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // Keeps track of pre-ico contributors and whether or not their tokens have been issued  //
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    mapping(address => bool) PREICOContributionTokensReleased;
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Keeps track of pre-ico contributors and how many tokens they are entitled to get based on their contribution //
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    mapping(address => uint256) PREICOContributorTokensPendingRelease;
+    mapping(uint256 => address) PREICOContributors; // iterative list of pre-ico contributor addresses
+    uint256 PREICOContributorsCount = 0; // Total number of pre-ico contributors
 
+
+    ///////////////////////////////////////////////////////////////////
+    // Checks if all pre-ico contributors have received their tokens //
+    ///////////////////////////////////////////////////////////////////
+    modifier NoPREICOContributorsAwaitingTokens() {
+
+        // Determine if all pre-ico contributors have received tokens
+        require(getOutstandingPREICOTokenIssuance() == 0);
+
+        _;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////
+    // Checks if there are any pre-ico contributors that have not recieved their tokens  //
+    ///////////////////////////////////////////////////////////////////////////////////////
+    modifier PREICOContributorsAwaitingTokens() {
+
+        // Determine if all pre-ico contributors have received tokens
+        require(getOutstandingPREICOTokenIssuance() > 0);
+
+        _;
+    }
 
     ////////////////////////////////////////////////////
     // Checks if CoFounders are performing the action //
@@ -98,14 +122,6 @@ contract DNNICO {
         _;
     }
 
-    //////////////////////////////////////////////////////
-    // Only DNN Holding Multisig is allowed to proceed. //
-    //////////////////////////////////////////////////////
-    modifier onlyDNNHoldingMultisig() {
-        require (msg.sender == dnnHoldingMultisig);
-        _;
-    }
-
     //////////////////////////////////////
     // Check if the pre-ico is going on //
     //////////////////////////////////////
@@ -114,23 +130,28 @@ contract DNNICO {
        _;
     }
 
+    //////////////////////////////////////
+    // Check if the pre-ico is going on //
+    //////////////////////////////////////
+    modifier ICOHasNotEnded() {
+       require (now < ICOEndDate);
+       _;
+    }
+
+    //////////////////////////////////////
+    // Check if the pre-ico is going on //
+    //////////////////////////////////////
+    modifier ICOHasEnded() {
+       require (now >= ICOEndDate || fundsRaisedInWei >= maximumFundingGoalInETH);
+       _;
+    }
+
     /////////////////////////////////////////////////////////////
     // User has to send at least the ether value of one token. //
     /////////////////////////////////////////////////////////////
     modifier ContributionIsAtLeastMinimum() {
-        require (now >= ICOStartDate ?
-                  msg.value >= minimumICOContributionInWei :
-                  msg.value >= minimumPREICOContributionInWei
-        );
+        require (msg.value >= minimumICOContributionInWei);
         _;
-    }
-
-    ////////////////////////////////////
-    // Check max cap has been reached //
-    ////////////////////////////////////
-    modifier MaximumGoalNotReached() {
-       require (fundsRaisedInWei < maximumFundingGoalInWei);
-       _;
     }
 
     ///////////////////////////////////////////////////////////////
@@ -138,16 +159,40 @@ contract DNNICO {
     ///////////////////////////////////////////////////////////////
     modifier ContributionDoesNotCauseGoalExceedance() {
        uint256 newContractBalance = msg.value+fundsRaisedInWei;
-       require (newContractBalance <= maximumFundingGoalInWei);
+       require (newContractBalance <= maximumFundingGoalInETH && fundsRaisedInWei < maximumFundingGoalInETH);
        _;
     }
 
     /////////////////////////////////////////////////////////////////
     // Check if the specified beneficiary has sent us funds before //
     /////////////////////////////////////////////////////////////////
-    modifier HasNotReceivedPREICOTokens(address contributorAddress) {
-        require (PREICOContributionTokensReleased[contributorAddress] != true);
+    modifier HasPendingPREICOTokens(address _contributor) {
+        require (PREICOContributorTokensPendingRelease[_contributor] !=  0);
         _;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // @des Gives back the total count of pre-ico contributors that haven't received tokens //
+    //////////////////////////////////////////////////////////////////////////////////////////
+    function getOutstandingPREICOTokenIssuance()
+        internal
+        constant
+        returns (uint256)
+    {
+        // Total count of preico contributors still waiting for tokens
+        uint256 outstandingContributorCount = 0;
+
+        // Iterate through the list of pre-ico contributors, checking for those that have
+        // not yet received tokens
+        for (uint256 index=0; index < PREICOContributorsCount; index++) {
+
+            // Use the address of the pre-ico contributor to check if they have not yet received tokens
+            if (PREICOContributorTokensPendingRelease[PREICOContributors[index]] > 0) {
+                outstandingContributorCount++;
+            }
+        }
+
+        return outstandingContributorCount;
     }
 
     ///////////////////////////////////////////////////////
@@ -190,6 +235,33 @@ contract DNNICO {
         return ETHContributions[_owner];
     }
 
+    ////////////////////////////////////////////////////////////
+    // @des Determines if an address is a pre-ICO contributor //
+    ////////////////////////////////////////////////////////////
+    function isExistingPREICOContributor(address _contributorAddress)
+       internal
+       returns (bool)
+    {
+        // Iterate through the list of pre-ico contributors, checking for the specific contributor provided
+        for (uint256 index=0; index < PREICOContributorsCount; index++) {
+
+            // Check if the address exists in pre-ICO contributor list
+            if (PREICOContributors[index] == _contributorAddress) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+    /////////////////////////////////////////////////////////////
+    // @des Returns pending presale tokens for a given address //
+    /////////////////////////////////////////////////////////////
+    function getPendingPresaleTokens(address _contributor)
+        constant
+        returns (uint256)
+    {
+        return PREICOContributorTokensPendingRelease[_contributor];
+    }
 
     ////////////////////////////////
     // @des Returns current bonus //
@@ -306,7 +378,6 @@ contract DNNICO {
     ///////////////////////////////////////////////////////////////
     function buyTokens()
         internal
-        MaximumGoalNotReached
         ContributionIsAtLeastMinimum
         ContributionDoesNotCauseGoalExceedance
         returns (bool)
@@ -327,11 +398,13 @@ contract DNNICO {
         // Determine which token allocation we should be deducting from
         DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.ICOSupplyAllocation;
 
-        // Attempt to purchase tokens
+        // Attempt to issue tokens to contributor
         if (!dnnToken.issueTokens(msg.sender, tokenCount, allocationType)) {
             revert();
-            return false;
         }
+
+        // Transfer funds to multisig
+        dnnHoldingMultisig.transfer(msg.value);
 
         return true;
     }
@@ -347,77 +420,55 @@ contract DNNICO {
         returns (bool)
     {
 
-          // Update total amount of tokens distributed (in atto-DNN)
-          tokensDistributed = tokensDistributed.add(tokenCount);
-
           // Keep track of contributions (in Wei)
           ETHContributions[beneficiary] = ETHContributions[beneficiary].add(weiamount);
 
           // Increase total funds raised by contribution
           fundsRaisedInWei = fundsRaisedInWei.add(weiamount);
 
-          // Determine which token allocation we should be deducting from
-          DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.PREICOSupplyAllocation;
-
-          // Attempt to purchase tokens
-          if (!dnnToken.issueTokens(beneficiary, tokenCount, allocationType)) {
-              revert();
-              return false;
-          }
-          // Denote that the pre-ico contributor has been given their tokens
-          else {
-              PREICOContributionTokensReleased[beneficiary] = true;
+          // Check to see if this contributor has sent ETH in the past, prior to reflecting them in
+          // the contract as a new participant
+          if (!isExistingPREICOContributor(beneficiary)) {
+              PREICOContributors[PREICOContributorsCount] = beneficiary;
+              PREICOContributorsCount += 1;
           }
 
-          return true;
+          // Add these tokens to the total amount of tokens this contributor is entitled to
+          PREICOContributorTokensPendingRelease[beneficiary] = PREICOContributorTokensPendingRelease[beneficiary].add(tokenCount);
+
+          // Send tokens to contibutor
+          return issuePREICOTokens(beneficiary);
       }
 
     ///////////////////////////////////////////////////////////////
-    // @des Issues tokens to contributor based on custom bonuses //
+    // @des Issues pending tokens to pre-ico contributor         //
     // @param beneficiary Address the tokens will be issued to.  //
     ///////////////////////////////////////////////////////////////
     function issuePREICOTokens(address beneficiary)
         onlyCofounders
-        HasNotReceivedPREICOTokens(beneficiary)
+        PREICOContributorsAwaitingTokens
+        HasPendingPREICOTokens(beneficiary)
         returns (bool)
     {
 
         // Amount of tokens to credit pre-ico contributor
-        uint256 tokenCount = 0;
-
-        // If no bonus was specified, then we will fall back on our pre-ico bonus ranges
-        tokenCount = calculateTokens(ETHContributions[beneficiary], now);
+        uint256 tokenCount = PREICOContributorTokensPendingRelease[beneficiary];
 
         // Update total amount of tokens distributed (in atto-DNN)
         tokensDistributed = tokensDistributed.add(tokenCount);
 
-        // Determine which token allocation we should be deducting from
+        // Allocation type will be PREICOSupplyAllocation
         DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.PREICOSupplyAllocation;
 
-        // Attempt to purchase tokens
+        // Attempt to issue tokens
         if (!dnnToken.issueTokens(beneficiary, tokenCount, allocationType)) {
             revert();
-            return false;
         }
-        // Denote that the pre-ico contributor has been given their tokens
-        else {
-            PREICOContributionTokensReleased[beneficiary] = true;
-        }
+
+        // Denote that tokens have been issued for this pre-ico contributor
+        PREICOContributorTokensPendingRelease[beneficiary] = 0;
 
         return true;
-    }
-
-    ///////////////////////////////////////////////////////////
-    // @des Sends all of the amount of funds to the multisig //
-    ///////////////////////////////////////////////////////////
-    function transferAllFunds()
-      onlyCofounders
-    {
-        // Make sure we have funds to transfer
-        require(this.balance != 0);
-
-        // Attempt to transfer funds
-        dnnHoldingMultisig.transfer(this.balance);  
     }
 
 
@@ -426,12 +477,8 @@ contract DNNICO {
     /////////////////////////////////
     function finalizeICO()
        onlyCofounders
+       ICOHasEnded
     {
-        // Send all funds to multisig if we have funds
-        if (this.balance > 0) {
-            transferAllFunds();
-        }
-
         // Unlock tokens
         dnnToken.unlockTokens();
 
@@ -445,6 +492,7 @@ contract DNNICO {
     ////////////////////////////////////////////////////////////////////////////////
     function finalizePREICO()
        onlyCofounders
+       NoPREICOContributorsAwaitingTokens
     {
         // Transfer unsold ICO tokens to platform
         dnnToken.sendUnsoldPREICOTokensToICO();
@@ -454,7 +502,7 @@ contract DNNICO {
     ///////////////////////////////
     // @des Contract constructor //
     ///////////////////////////////
-    function DNNICO(address tokenAddress, address founderA, address founderB, address dnnHolding, uint256 hardCapInWei, uint256 startDate, uint256 endDate)
+    function DNNICO(address tokenAddress, address founderA, address founderB, address dnnHolding, uint256 hardCap, uint256 startDate, uint256 endDate)
     {
 
         // Set token address
@@ -468,22 +516,24 @@ contract DNNICO {
         dnnHoldingMultisig = dnnHolding;
 
         // Set Hard Cap
-        maximumFundingGoalInWei = hardCapInWei;
+        maximumFundingGoalInETH = hardCap * 1 ether;
 
         // Set Start Date
-        ICOStartDate = startDate;
+        ICOStartDate = startDate >= now ? startDate : now;
 
-        // Set End date
-        ICOEndDate = endDate;
+        // Set End date (Make sure the end date is at least 30 days from start date)
+        // Will default to a date that is exactly 30 days from start date.
+        ICOEndDate = endDate > ICOStartDate && (endDate-ICOStartDate) >= 30 days ? endDate : (ICOStartDate + 30 days);
     }
 
-    ////////////////////////////////////////////////////
-    // Handle's ETH sent directly to contract address //
-    ////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////
+    // @des Handle's ETH sent directly to contract address //
+    /////////////////////////////////////////////////////////
     function () payable {
 
         // Handle pre-sale contribution (tokens held, until tx confirmation from contributor)
-        if (now < ICOStartDate) {
+        // Also, make sure the user sends minimum PRE-ICO contribution.
+        if (now < ICOStartDate && msg.value >= minimumPREICOContributionInWei) {
 
             // Keep track of contributions (in Wei)
             ETHContributions[msg.sender] = ETHContributions[msg.sender].add(msg.value);
@@ -491,6 +541,19 @@ contract DNNICO {
             // Increase total funds raised by contribution
             fundsRaisedInWei = fundsRaisedInWei.add(msg.value);
 
+            /// Make a note of how many tokens this user should get for their contribution to the presale
+            PREICOContributorTokensPendingRelease[msg.sender] = PREICOContributorTokensPendingRelease[msg.sender].add(calculateTokens(msg.value, now));
+
+            // Store the users address and update pre-ico contibutor count (will be used when determining outstanding token issuance)
+            // Check to see if this contributor has sent ETH in the past, prior to reflecting them in
+            // the contract as a new participant
+            if (!isExistingPREICOContributor(msg.sender)) {
+                PREICOContributors[PREICOContributorsCount] = msg.sender;
+                PREICOContributorsCount += 1;
+            }
+
+            // Transfer contribution directly to multisig
+            dnnHoldingMultisig.transfer(msg.value);
         }
 
         // Handle public-sale contribution (tokens issued immediately)
