@@ -72,8 +72,7 @@ contract DNNICO {
     // Keeps track of pre-ico contributors and how many tokens they are entitled to get based on their contribution //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     mapping(address => uint256) PREICOContributorTokensPendingRelease;
-    mapping(uint256 => address) PREICOContributors; // iterative list of pre-ico contributor addresses
-    uint256 PREICOContributorsCount = 0; // Total number of pre-ico contributors
+    uint256 PREICOContributorsTokensPendingCount = 0;
 
 
     ///////////////////////////////////////////////////////////////////
@@ -82,7 +81,7 @@ contract DNNICO {
     modifier NoPREICOContributorsAwaitingTokens() {
 
         // Determine if all pre-ico contributors have received tokens
-        require(getOutstandingPREICOTokenIssuance() == 0);
+        require(PREICOContributorsTokensPendingCount == 0);
 
         _;
     }
@@ -92,8 +91,8 @@ contract DNNICO {
     ///////////////////////////////////////////////////////////////////////////////////////
     modifier PREICOContributorsAwaitingTokens() {
 
-        // Determine if all pre-ico contributors have received tokens
-        require(getOutstandingPREICOTokenIssuance() > 0);
+        // Determine if there pre-ico contributors that have not received tokens
+        require(PREICOContributorsTokensPendingCount > 0);
 
         _;
     }
@@ -159,7 +158,7 @@ contract DNNICO {
     ///////////////////////////////////////////////////////////////
     modifier ContributionDoesNotCauseGoalExceedance() {
        uint256 newFundsRaised = msg.value+fundsRaisedInWei;
-       require (newFundsRaised <= maximumFundingGoalInETH && fundsRaisedInWei < maximumFundingGoalInETH);
+       require (newFundsRaised <= maximumFundingGoalInETH);
        _;
     }
 
@@ -171,28 +170,12 @@ contract DNNICO {
         _;
     }
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    // @des Gives back the total count of pre-ico contributors that haven't received tokens //
-    //////////////////////////////////////////////////////////////////////////////////////////
-    function getOutstandingPREICOTokenIssuance()
-        internal
-        constant
-        returns (uint256)
-    {
-        // Total count of preico contributors still waiting for tokens
-        uint256 outstandingContributorCount = 0;
-
-        // Iterate through the list of pre-ico contributors, checking for those that have
-        // not yet received tokens
-        for (uint256 index=0; index < PREICOContributorsCount; index++) {
-
-            // Use the address of the pre-ico contributor to check if they have not yet received tokens
-            if (PREICOContributorTokensPendingRelease[PREICOContributors[index]] > 0) {
-                outstandingContributorCount++;
-            }
-        }
-
-        return outstandingContributorCount;
+    /////////////////////////////////////////////////////////////
+    // Check if pre-ico contributors is not waiting for tokens //
+    /////////////////////////////////////////////////////////////
+    modifier IsNotAwaitingPREICOTokens(address _contributor) {
+        require (PREICOContributorTokensPendingRelease[_contributor] ==  0);
+        _;
     }
 
     ///////////////////////////////////////////////////////
@@ -238,21 +221,13 @@ contract DNNICO {
     ////////////////////////////////////////////////////////////
     // @des Determines if an address is a pre-ICO contributor //
     ////////////////////////////////////////////////////////////
-    function isExistingPREICOContributor(address _contributorAddress)
+    function isAwaitingPREICOTokens(address _contributorAddress)
        internal
        returns (bool)
     {
-        // Iterate through the list of pre-ico contributors, checking for the specific contributor provided
-        for (uint256 index=0; index < PREICOContributorsCount; index++) {
-
-            // Check if the address exists in pre-ICO contributor list
-            if (PREICOContributors[index] == _contributorAddress) {
-                return true;
-            }
-        }
-
-        return false;
+        return PREICOContributorTokensPendingRelease[_contributorAddress] > 0;
     }
+
     /////////////////////////////////////////////////////////////
     // @des Returns pending presale tokens for a given address //
     /////////////////////////////////////////////////////////////
@@ -417,24 +392,20 @@ contract DNNICO {
     function buyPREICOTokensWithoutETH(address beneficiary, uint256 weiamount, uint tokenCount)
         onlyCofounders
         PREICOHasNotEnded
+        IsNotAwaitingPREICOTokens(beneficiary)
         returns (bool)
     {
-
           // Keep track of contributions (in Wei)
           ETHContributions[beneficiary] = ETHContributions[beneficiary].add(weiamount);
 
           // Increase total funds raised by contribution
           fundsRaisedInWei = fundsRaisedInWei.add(weiamount);
 
-          // Check to see if this contributor has sent ETH in the past, prior to reflecting them in
-          // the contract as a new participant
-          if (!isExistingPREICOContributor(beneficiary)) {
-              PREICOContributors[PREICOContributorsCount] = beneficiary;
-              PREICOContributorsCount += 1;
-          }
-
           // Add these tokens to the total amount of tokens this contributor is entitled to
           PREICOContributorTokensPendingRelease[beneficiary] = PREICOContributorTokensPendingRelease[beneficiary].add(tokenCount);
+
+          // Incrment number of pre-ico contributors waiting for tokens
+          PREICOContributorsTokensPendingCount += 1;
 
           // Send tokens to contibutor
           return issuePREICOTokens(beneficiary);
@@ -465,6 +436,9 @@ contract DNNICO {
             revert();
         }
 
+        // Reduce number of pre-ico contributors waiting for tokens
+        PREICOContributorsTokensPendingCount -= 1;
+
         // Denote that tokens have been issued for this pre-ico contributor
         PREICOContributorTokensPendingRelease[beneficiary] = 0;
 
@@ -480,7 +454,7 @@ contract DNNICO {
        ICOHasEnded
     {
         // Check if the tokens are either locked or we have tokens to transfer
-        require(dnnToken.tokensLocked() == true || dnnToken.ICOSupplyRemaining() > 0);
+        require(dnnToken.tokensLocked() == true);
 
         // Unlock tokens
         dnnToken.unlockTokens();
@@ -538,8 +512,9 @@ contract DNNICO {
     function () payable {
 
         // Handle pre-sale contribution (tokens held, until tx confirmation from contributor)
-        // Also, make sure the user sends minimum PRE-ICO contribution.
-        if (now < ICOStartDate && msg.value >= minimumPREICOContributionInWei) {
+        // Makes sure the user sends minimum PRE-ICO contribution, and that  pre-ico contributors
+        // are unable to send  subsequent ETH contributors before being issued tokens.
+        if (now < ICOStartDate && msg.value >= minimumPREICOContributionInWei && PREICOContributorTokensPendingRelease[msg.sender] == 0) {
 
             // Keep track of contributions (in Wei)
             ETHContributions[msg.sender] = ETHContributions[msg.sender].add(msg.value);
@@ -550,13 +525,8 @@ contract DNNICO {
             /// Make a note of how many tokens this user should get for their contribution to the presale
             PREICOContributorTokensPendingRelease[msg.sender] = PREICOContributorTokensPendingRelease[msg.sender].add(calculateTokens(msg.value, now));
 
-            // Store the users address and update pre-ico contibutor count (will be used when determining outstanding token issuance)
-            // Check to see if this contributor has sent ETH in the past, prior to reflecting them in
-            // the contract as a new participant
-            if (!isExistingPREICOContributor(msg.sender)) {
-                PREICOContributors[PREICOContributorsCount] = msg.sender;
-                PREICOContributorsCount += 1;
-            }
+            // Increment number of pre-ico contributors waiting for tokens
+            PREICOContributorsTokensPendingCount += 1;
 
             // Transfer contribution directly to multisig
             dnnHoldingMultisig.transfer(msg.value);

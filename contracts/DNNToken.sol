@@ -27,7 +27,8 @@ contract DNNToken is StandardToken {
     /////////////////////////////////////////////////////////////////////
     // Smart-Contract with permission to allocate tokens from supplies //
     /////////////////////////////////////////////////////////////////////
-    address public allocator;
+    address public allocatorAddress;
+    address public crowdfundContract;
 
     /////////////////////
     // Token Meta Data //
@@ -155,7 +156,16 @@ contract DNNToken is StandardToken {
     /////////////////////////////////////////////////////////////////////
     modifier CanSetAllocator()
     {
-       require (allocator == address(0x0) || tokensLocked == false);
+       require (allocatorAddress == address(0x0) || tokensLocked == false);
+       _;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // Checks to see if we are allowed to change the crowdfund contract //
+    //////////////////////////////////////////////////////////////////////
+    modifier CanSetCrowdfundContract()
+    {
+       require (crowdfundContract == address(0x0) || tokensLocked == false);
        _;
     }
 
@@ -164,7 +174,25 @@ contract DNNToken is StandardToken {
     //////////////////////////////////////////////////
     modifier onlyAllocator()
     {
-        require (msg.sender == allocator);
+        require (msg.sender == allocatorAddress && tokensLocked == false);
+        _;
+    }
+
+    ///////////////////////////////////////////////////////////
+    // Checks if Crowdfund Contract is performing the action //
+    ///////////////////////////////////////////////////////////
+    modifier onlyCrowdfundContract()
+    {
+        require (msg.sender == crowdfundContract);
+        _;
+    }
+
+    ////////////////////////////////////////////////////////////////////////
+    // Checks if Crowdfund Contract or Allocator is performing the action //
+    ////////////////////////////////////////////////////////////////////////
+    modifier onlyAllocatorOrCrowdfundContract()
+    {
+        require (msg.sender == allocatorAddress || msg.sender == crowdfundContract);
         _;
     }
 
@@ -178,6 +206,17 @@ contract DNNToken is StandardToken {
         platform = newAddress;
     }
 
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  @des Function to change address that is allowed to do token issuance. Crowdfund contract can only be set once.   //
+    //  @param newAddress Address of new issuance contract.                                                              //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    function changeCrowdfundContract(address newAddress)
+        onlyCofounders
+        CanSetCrowdfundContract
+    {
+        crowdfundContract = newAddress;
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //  @des Function to change address that is allowed to do token issuance. Allocator can only be set once.  //
     //  @param newAddress Address of new issuance contract.                                                    //
@@ -186,7 +225,7 @@ contract DNNToken is StandardToken {
         onlyCofounders
         CanSetAllocator
     {
-        allocator = newAddress;
+        allocatorAddress = newAddress;
     }
 
     ///////////////////////////////////////////////////////
@@ -270,16 +309,21 @@ contract DNNToken is StandardToken {
     // Issue tokens //
     //////////////////
     function issueTokens(address beneficiary, uint tokenCount, DNNSupplyAllocations allocationType)
-      onlyAllocator
+      onlyAllocatorOrCrowdfundContract
       returns (bool)
     {
+        // We'll use the following to determine whether the allocator
+        // or the crowdfunding contract can allocate each supply
+        bool canAllocatorPerform = msg.sender == allocatorAddress && tokensLocked == false;
+        bool canCrowdfundContractPerform = msg.sender == crowdfundContract;
+
         // Early Backers
-        if (allocationType == DNNSupplyAllocations.EarlyBackerSupplyAllocation && tokenCount <= earlyBackerSupplyRemaining) {
+        if (canAllocatorPerform && allocationType == DNNSupplyAllocations.EarlyBackerSupplyAllocation && tokenCount <= earlyBackerSupplyRemaining) {
             earlyBackerSupplyRemaining = earlyBackerSupplyRemaining.sub(tokenCount);
         }
 
         // PRE-ICO
-        else if (allocationType == DNNSupplyAllocations.PREICOSupplyAllocation) {
+        else if (canCrowdfundContractPerform && msg.sender == crowdfundContract && allocationType == DNNSupplyAllocations.PREICOSupplyAllocation) {
 
               // Check to see if we have enough tokens to satisfy this purchase
               // using just the pre-ico.
@@ -306,27 +350,27 @@ contract DNNToken is StandardToken {
         }
 
         // ICO
-        else if (allocationType == DNNSupplyAllocations.ICOSupplyAllocation && tokenCount <= ICOSupplyRemaining) {
+        else if (canCrowdfundContractPerform && allocationType == DNNSupplyAllocations.ICOSupplyAllocation && tokenCount <= ICOSupplyRemaining) {
             ICOSupplyRemaining = ICOSupplyRemaining.sub(tokenCount);
         }
 
         // Bounty
-        else if (allocationType == DNNSupplyAllocations.BountySupplyAllocation && tokenCount <= bountySupplyRemaining) {
+        else if (canAllocatorPerform && allocationType == DNNSupplyAllocations.BountySupplyAllocation && tokenCount <= bountySupplyRemaining) {
             bountySupplyRemaining = bountySupplyRemaining.sub(tokenCount);
         }
 
         // Writer Accounts
-        else if (allocationType == DNNSupplyAllocations.WriterAccountSupplyAllocation && tokenCount <= writerAccountSupplyRemaining) {
+        else if (canAllocatorPerform && allocationType == DNNSupplyAllocations.WriterAccountSupplyAllocation && tokenCount <= writerAccountSupplyRemaining) {
             writerAccountSupplyRemaining = writerAccountSupplyRemaining.sub(tokenCount);
         }
 
         // Advisory
-        else if (allocationType == DNNSupplyAllocations.AdvisorySupplyAllocation && tokenCount <= advisorySupplyRemaining) {
+        else if (canAllocatorPerform && allocationType == DNNSupplyAllocations.AdvisorySupplyAllocation && tokenCount <= advisorySupplyRemaining) {
             advisorySupplyRemaining = advisorySupplyRemaining.sub(tokenCount);
         }
 
         // Platform (Also makes sure that the beneficiary is the platform address specified in this contract)
-        else if (beneficiary == platform && allocationType == DNNSupplyAllocations.PlatformSupplyAllocation && tokenCount <= platformSupplyRemaining) {
+        else if (canAllocatorPerform && beneficiary == platform && allocationType == DNNSupplyAllocations.PlatformSupplyAllocation && tokenCount <= platformSupplyRemaining) {
             platformSupplyRemaining = platformSupplyRemaining.sub(tokenCount);
         }
 
@@ -345,7 +389,7 @@ contract DNNToken is StandardToken {
     /////////////////////////////////////////////////
     function sendUnsoldICOTokensToPlatform()
       external
-      onlyAllocator
+      onlyCrowdfundContract
     {
         // Make sure we have tokens to send from ICO
         require(ICOSupplyRemaining > 0);
@@ -362,7 +406,7 @@ contract DNNToken is StandardToken {
     /////////////////////////////////////////////////////
     function sendUnsoldPREICOTokensToICO()
       external
-      onlyAllocator
+      onlyCrowdfundContract
     {
         // Make sure we have tokens to send from pre-ICO
         require(PREICOSupplyRemaining > 0);
@@ -379,7 +423,7 @@ contract DNNToken is StandardToken {
     ////////////////////////////////////////////////////////////////
     function unlockTokens()
         external
-        onlyAllocator
+        onlyCrowdfundContract
     {
         // Make sure tokens are currently locked before proceeding to unlock them
         require(tokensLocked == true);

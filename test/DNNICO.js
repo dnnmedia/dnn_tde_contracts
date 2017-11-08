@@ -22,6 +22,13 @@ contract("DNNICO", function(accounts) {
           date.setFullYear(date.getFullYear() + yearCount);
           return Math.floor( date / 1000 );
       };
+      let isException = function(error) {
+          let strError = error.toString();
+          return strError.includes('invalid opcode') || strError.includes('invalid JUMP');
+      };
+      let ensureException = function(error) {
+          assert(isException(error), error.toString());
+      };
 
       // Constants
       let multisig = accounts[0];
@@ -53,13 +60,15 @@ contract("DNNICO", function(accounts) {
             // Initialize token and ico contract
             const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
             const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 1 /* Ether */, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
-            await token.changeAllocator(ico.address, {from: cofounderA, gas: gasAmount});
+            await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
 
             // Try unlocking the tokens by prematurely ending ICO
             try {
               await ico.finalizeICO({from: cofounderA, gas: gasAmount});
             }
-            catch (e) {}
+            catch (e) {
+              ensureException(e);
+            }
 
             // Check if tokens are still locked
             let tokensLocked =  await token.tokensLocked({from: cofounderA, gas: gasAmount});
@@ -69,7 +78,9 @@ contract("DNNICO", function(accounts) {
             try {
                 await token.transfer(cofounderA, ETHToWei(100), {from: buyer_address, gas: gasAmount})
             }
-            catch(e) {}
+            catch (e) {
+              ensureException(e);
+            }
 
             // Make sure the token transfer failed
             let cofounderA_balance =  await token.balanceOf(cofounderA, {from: cofounderA, gas: gasAmount});
@@ -82,7 +93,9 @@ contract("DNNICO", function(accounts) {
             try {
               await ico.finalizeICO({from: cofounderA, gas: gasAmount});
             }
-            catch (e) {}
+            catch (e) {
+              ensureException(e);
+            }
 
             // Check if tokens are still locked
             tokensLocked =  await token.tokensLocked({from: cofounderA, gas: gasAmount});
@@ -92,7 +105,9 @@ contract("DNNICO", function(accounts) {
             try {
                 await token.transfer(cofounderA, ETHToWei(100), {from: buyer_address, gas: gasAmount})
             }
-            catch(e) {}
+            catch (e) {
+              ensureException(e);
+            }
 
             // Check balance
             cofounderA_balance =  await token.balanceOf(cofounderA, {from: cofounderA, gas: gasAmount});
@@ -104,22 +119,49 @@ contract("DNNICO", function(accounts) {
               // Initialize tokens and ico contract (offset the start date and end date so we can test presale bonuses)
               const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
               const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, hardcap, nowPlusOrMinusYears(3), nowPlusOrMinusYears(4), {from: multisig, gas: gasAmount});
-              await token.changeAllocator(ico.address, {from: cofounderA, gas: gasAmount});
+              await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
+
+              // Check pre-sale balance before issuing the buyer's tokens
+              const PREICOSupplyRemaining_one = await token.PREICOSupplyRemaining.call({from: buyer_address, gas: gasAmount});
+              assert.equal(WeiToETH(PREICOSupplyRemaining_one), 100000000, "Remaining pre-ico balance should be 100,000,000 tokens");
 
               // Attempt to purchase tokens using an amount lower than presale minimum
               try {
                 await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("99", "Ether")});
               }
-              catch(e) {}
+              catch (e) {
+                ensureException(e);
+              }
 
               // Check to see if the transaction failed
               let buyerA_ETH_contribution = await ico.contributorETHBalance(buyer_address, {from: buyer_address, gas: gasAmount});
               assert.equal(WeiToETH(buyerA_ETH_contribution), 0, "The total contribution of this buyer should be 0 ETH");
 
-              // Attempt to purchase tokens at every presale range
+              // Buy at first pre-ico range
               await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("100", "Ether")});
+
+              // Issue tokens
+              await ico.issuePREICOTokens(buyer_address, {from: cofounderA, gas: gasAmount});
+
+              // Buy at next range
               await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("200", "Ether")});
+
+              // Try  purchasing tokens before tokens have been issued to this pre-ico contributor
+              try {
+                await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("200", "Ether")});
+              }
+              catch(e) {
+                ensureException(e);
+              }
+
+              // Issue tokens
+              await ico.issuePREICOTokens(buyer_address, {from: cofounderA, gas: gasAmount});
+
+              // Buy at next range
               await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("301", "Ether")});
+
+              // Issue tokens
+              await ico.issuePREICOTokens(buyer_address, {from: cofounderA, gas: gasAmount});
 
               // Check total ETH given by buyer
               buyerA_ETH_contribution = await ico.contributorETHBalance(buyer_address, {from: buyer_address, gas: gasAmount});
@@ -127,19 +169,7 @@ contract("DNNICO", function(accounts) {
 
               // Check token balance of buyer after third bonus purchase
               const buyerA_balance_one = await token.balanceOf(buyer_address, {from: buyer_address, gas: gasAmount});
-              assert.equal(WeiToETH(buyerA_balance_one), 0, "The buyer should have a 0 token balance");
-
-              // Check pre-sale balance before issuing the buyer's tokens
-              const PREICOSupplyRemaining_one = await token.PREICOSupplyRemaining.call({from: buyer_address, gas: gasAmount});
-              assert.equal(WeiToETH(PREICOSupplyRemaining_one), 100000000, "Remaining pre-ico balance should be 100,000,000 tokens");
-
-              // Amount of tokens buyer is entitled to
-              const buyerA_token_entitlement = await ico.calculateTokens.call(ETHToWei(601), nowPlusOrMinusYears(0), {from: buyer_address, gas: gasAmount});
-              assert.equal(WeiToETH(buyerA_token_entitlement), 2253750, "The buyer is entitled to a balance of 2,253,750 tokens");
-
-              // Release tokens that buyer is entitled to
-              let tokensReleased = await ico.issuePREICOTokens(buyer_address, {from: cofounderA, gas: gasAmount});
-              assert.equal(Boolean(tokensReleased), true, "Tokens should have been released to buyer");
+              assert.equal(WeiToETH(buyerA_balance_one), 2193750, "The buyer should have a 2,193,750 token balance");
 
               // Manually buy tokens
               await ico.buyPREICOTokensWithoutETH(buyer_address, ETHToWei(5), ETHToWei(100000), {from: cofounderA, gas: gasAmount});
@@ -160,7 +190,9 @@ contract("DNNICO", function(accounts) {
               try {
                 tokensReleased = await ico.issuePREICOTokens(cofounderA, {from: cofounderA, gas: gasAmount});
               }
-              catch(e) {}
+              catch (e) {
+                ensureException(e);
+              }
 
               // Make sure token issuance failed
               tokensDistributed = await ico.tokensDistributed.call({from: buyer_address, gas: gasAmount});
@@ -170,13 +202,17 @@ contract("DNNICO", function(accounts) {
               try {
                 await ico.buyPREICOTokensWithoutETH(buyer_address, ETHToWei(5), ETHToWei(100000), {from: buyer_address, gas: gasAmount});
               }
-              catch(e) {}
+              catch (e) {
+                ensureException(e);
+              }
 
               // Try buying more tokens than the entire pre-ico and ico supplies combined
               try {
                 await ico.buyPREICOTokensWithoutETH(buyer_address, ETHToWei(5), ETHToWei(600000000), {from: buyer_address, gas: gasAmount});
               }
-              catch(e) {}
+              catch (e) {
+                ensureException(e);
+              }
 
               // Make sure token issuance failed
               tokensDistributed = await ico.tokensDistributed.call({from: buyer_address, gas: gasAmount});
@@ -202,7 +238,13 @@ contract("DNNICO", function(accounts) {
               const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
 
               // Deploy new ico contract
-              const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, hardcap, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
+              const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 0, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
+
+              // Set crowdfund contract
+              await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
+
+              // Finalize ICO
+              await ico.finalizeICO({from: cofounderA, gas: gasAmount});
 
               // Set allocator
               await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
@@ -219,7 +261,10 @@ contract("DNNICO", function(accounts) {
               // Try sending more tokens than the early backer supply
               try {
                   await token.issueTokens(earlyBacker, ETHToWei(120000000), EarlyBackerSupplyAllocation, {from: cofounderA, gas: gasAmount});
-              } catch (e) {}
+              }
+              catch (e) {
+                ensureException(e);
+              }
 
               // Send tokens to early backer
               await token.issueTokens(earlyBacker, ETHToWei(100000), EarlyBackerSupplyAllocation, {from: cofounderA, gas: gasAmount});
@@ -260,7 +305,7 @@ contract("DNNICO", function(accounts) {
               const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
 
               // Set allocator
-              await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
+              await token.changeCrowdfundContract(cofounderA, {from: cofounderA, gas: gasAmount});
 
               // Move tokens to ICO
               await token.sendUnsoldPREICOTokensToICO({from: cofounderA, gas: gasAmount});
@@ -280,7 +325,7 @@ contract("DNNICO", function(accounts) {
             const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
 
             // Set allocator
-            await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
+            await token.changeCrowdfundContract(cofounderA, {from: cofounderA, gas: gasAmount});
 
             // Move tokens to Platform
             await token.sendUnsoldICOTokensToPlatform({from: cofounderA, gas: gasAmount});
@@ -303,12 +348,15 @@ contract("DNNICO", function(accounts) {
               const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 10, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
 
               // Set allocator
-              await token.changeAllocator(ico.address, {from: cofounderA, gas: gasAmount});
+              await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
 
               // Attempt to send more ETH than goal
               try {
                   await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("11", "Ether")});
-              } catch(e) {}
+              }
+              catch (e) {
+                ensureException(e);
+              }
 
                // Contract balance
                let ico_raised  = await ico.fundsRaisedInWei.call({from: cofounderA, gas: gasAmount});
@@ -333,7 +381,7 @@ contract("DNNICO", function(accounts) {
             const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, hardcap, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
 
             // Set allocator
-            await token.changeAllocator(ico.address, {from: cofounderA, gas: gasAmount});
+            await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
 
             // Check initial balance token balance buyer
             const buyerA_balance_one = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
@@ -393,29 +441,31 @@ contract("DNNICO", function(accounts) {
         const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 0, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
 
         // Change allocator (token contract)
-        await token.changeAllocator(ico.address, {from: cofounderA, gas: gasAmount});
+        await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
 
-        let allocator = await token.allocator.call();
-        assert.equal(allocator == ico.address, true, "Allocator should be ICO address");
+        let allocator = await token.crowdfundContract.call();
+        assert.equal(allocator == ico.address, true, "Crowdfund Contract should be ICO address");
 
-        // Try to change the allocator while ICO is going on
+        // Try to change the contract address while ICO is going on
         try {
-          await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
+          await token.changeCrowdfundContract(cofounderA, {from: cofounderA, gas: gasAmount});
         }
-        catch(e) {}
+        catch (e) {
+          ensureException(e);
+        }
 
         // Check to see if the allocator has been changed
-        allocator = await token.allocator.call();
+        allocator = await token.crowdfundContract.call();
         assert.equal(allocator == ico.address, true, "Allocator should be ICO address");
 
         // Unlock tokens
         await ico.finalizeICO({from: cofounderA, gas: gasAmount});
 
         // Try to change the allocator once the tokens have been unlocked
-        await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
+        await token.changeCrowdfundContract(cofounderA, {from: cofounderA, gas: gasAmount});
 
         // Check to see if the allocator has been changed
-        allocator = await token.allocator.call();
+        allocator = await token.crowdfundContract.call();
         assert.equal(allocator == cofounderA, true, "Allocator should be cofounder A address");
 
         // Change cofounders (token contract)
@@ -453,7 +503,7 @@ contract("DNNICO", function(accounts) {
             const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 10, 0, 0, {from: multisig, gas: gasAmount});
 
             // Set allocator
-            await token.changeAllocator(ico.address, {from: cofounderA, gas: gasAmount});
+            await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
 
             // End PRE-ICO
             await ico.finalizePREICO({from: cofounderA, gas: gasAmount});
@@ -501,7 +551,10 @@ contract("DNNICO", function(accounts) {
                   // Try to issue tokens prior to next month
                   try {
                     await token.issueCofoundersTokensIfPossible({from: cofounderA, gas: gasAmount});
-                  } catch(e) {}
+                  }
+                  catch (e) {
+                    ensureException(e);
+                  }
 
                   let cofoundersSupplyVestingTranchesIssued = await token.cofoundersSupplyVestingTranchesIssued.call();
                   let cofoundersSupplyDistributed = await token.cofoundersSupplyDistributed.call();
@@ -513,9 +566,8 @@ contract("DNNICO", function(accounts) {
               {
                   await token.issueCofoundersTokensIfPossible({from: cofounderA, gas: gasAmount});
               }
-              catch(e)
-              {
-                  assert.equal(true, true, "Tokens can be issued beyond 10 months");
+              catch (e) {
+                ensureException(e);
               }
 
               // Each founder should have a total of 50,000,000 tokens each after 10 months
