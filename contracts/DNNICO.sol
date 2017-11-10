@@ -129,14 +129,6 @@ contract DNNICO {
        _;
     }
 
-    //////////////////////////////////
-    // Check if the ico is going on //
-    //////////////////////////////////
-    modifier ICOHasNotEnded() {
-       require (now < ICOEndDate);
-       _;
-    }
-
     ////////////////////////////////s
     // Check if the ico has ended //
     ////////////////////////////////
@@ -389,7 +381,7 @@ contract DNNICO {
     // @param beneficiary Address the tokens will be issued to.                           //
     // @param weiamount ETH amount (in Wei)                                               //
     ////////////////////////////////////////////////////////////////////////////////////////
-    function buyPREICOTokensWithoutETH(address beneficiary, uint256 weiamount, uint tokenCount)
+    function buyPREICOTokensWithoutETH(address beneficiary, uint256 weiamount, uint256 tokenCount)
         onlyCofounders
         PREICOHasNotEnded
         IsNotAwaitingPREICOTokens(beneficiary)

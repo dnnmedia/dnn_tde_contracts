@@ -165,7 +165,7 @@ contract DNNToken is StandardToken {
     //////////////////////////////////////////////////////////////////////
     modifier CanSetCrowdfundContract()
     {
-       require (crowdfundContract == address(0x0) || tokensLocked == false);
+       require (crowdfundContract == address(0x0));
        _;
     }
 
@@ -408,14 +408,15 @@ contract DNNToken is StandardToken {
       external
       onlyCrowdfundContract
     {
-        // Make sure we have tokens to send from pre-ICO
-        require(PREICOSupplyRemaining > 0);
+          // Make sure we have tokens to send from pre-ICO
+          if (PREICOSupplyRemaining > 0) {
 
-        // Add remaining pre-ico tokens to ico remaining tokens
-        ICOSupplyRemaining = ICOSupplyRemaining.add(PREICOSupplyRemaining);
+              // Add remaining pre-ico tokens to ico remaining tokens
+              ICOSupplyRemaining = ICOSupplyRemaining.add(PREICOSupplyRemaining);
 
-        // Clear remaining pre-ico token count
-        PREICOSupplyRemaining = 0;
+              // Clear remaining pre-ico token count
+              PREICOSupplyRemaining = 0;
+        }
     }
 
     ////////////////////////////////////////////////////////////////

@@ -448,10 +448,10 @@ contract("DNNICO", function(accounts) {
 
         // Try to change the contract address while ICO is going on
         try {
-          await token.changeCrowdfundContract(cofounderA, {from: cofounderA, gas: gasAmount});
+            await token.changeCrowdfundContract(cofounderA, {from: cofounderA, gas: gasAmount});
         }
         catch (e) {
-          ensureException(e);
+            ensureException(e);
         }
 
         // Check to see if the allocator has been changed
@@ -461,11 +461,11 @@ contract("DNNICO", function(accounts) {
         // Unlock tokens
         await ico.finalizeICO({from: cofounderA, gas: gasAmount});
 
-        // Try to change the allocator once the tokens have been unlocked
-        await token.changeCrowdfundContract(cofounderA, {from: cofounderA, gas: gasAmount});
+        // Try to change the allocator
+        await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
 
         // Check to see if the allocator has been changed
-        allocator = await token.crowdfundContract.call();
+        allocator = await token.allocatorAddress.call();
         assert.equal(allocator == cofounderA, true, "Allocator should be cofounder A address");
 
         // Change cofounders (token contract)
