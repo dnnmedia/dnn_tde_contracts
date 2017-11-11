@@ -187,12 +187,12 @@ contract DNNToken is StandardToken {
         _;
     }
 
-    ////////////////////////////////////////////////////////////////////////
-    // Checks if Crowdfund Contract or Allocator is performing the action //
-    ////////////////////////////////////////////////////////////////////////
-    modifier onlyAllocatorOrCrowdfundContract()
+    ///////////////////////////////////////////////////////////////////////////////////
+    // Checks if Crowdfund Contract, Platform, or Allocator is performing the action //
+    ///////////////////////////////////////////////////////////////////////////////////
+    modifier onlyAllocatorOrCrowdfundContractOrPlatform()
     {
-        require (msg.sender == allocatorAddress || msg.sender == crowdfundContract);
+        require (msg.sender == allocatorAddress || msg.sender == crowdfundContract || msg.sender == platform);
         _;
     }
 
@@ -309,13 +309,14 @@ contract DNNToken is StandardToken {
     // Issue tokens //
     //////////////////
     function issueTokens(address beneficiary, uint tokenCount, DNNSupplyAllocations allocationType)
-      onlyAllocatorOrCrowdfundContract
+      onlyAllocatorOrCrowdfundContractOrPlatform
       returns (bool)
     {
-        // We'll use the following to determine whether the allocator
-        // or the crowdfunding contract can allocate each supply
+        // We'll use the following to determine whether the allocator, platform,
+        // or the crowdfunding contract can allocate specified supply
         bool canAllocatorPerform = msg.sender == allocatorAddress && tokensLocked == false;
         bool canCrowdfundContractPerform = msg.sender == crowdfundContract;
+        bool canPlatformPerform = msg.sender == platform && tokensLocked == false;
 
         // Early Backers
         if (canAllocatorPerform && allocationType == DNNSupplyAllocations.EarlyBackerSupplyAllocation && tokenCount <= earlyBackerSupplyRemaining) {
@@ -370,7 +371,7 @@ contract DNNToken is StandardToken {
         }
 
         // Platform (Also makes sure that the beneficiary is the platform address specified in this contract)
-        else if (canAllocatorPerform && beneficiary == platform && allocationType == DNNSupplyAllocations.PlatformSupplyAllocation && tokenCount <= platformSupplyRemaining) {
+        else if (canPlatformPerform && allocationType == DNNSupplyAllocations.PlatformSupplyAllocation && tokenCount <= platformSupplyRemaining) {
             platformSupplyRemaining = platformSupplyRemaining.sub(tokenCount);
         }
 

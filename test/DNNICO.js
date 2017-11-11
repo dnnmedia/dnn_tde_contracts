@@ -43,6 +43,7 @@ contract("DNNICO", function(accounts) {
       let hardcap = 100000
       let gasAmount = 3000000;
       let buyer_address = accounts[8];
+      let user_address = accounts[9];
       let ICOStartDate = nowPlusOrMinusYears(0);
       let ICOEndDate = nowPlusOrMinusYears(3);
 
@@ -52,8 +53,42 @@ contract("DNNICO", function(accounts) {
       let BountySupplyAllocation = 3;
       let WriterAccountSupplyAllocation = 4;
       let AdvisorySupplyAllocation = 5;
-      let CofoundersSupplyAllocation = 6;
-      let PlatformSupplyAllocation = 7;
+      let PlatformSupplyAllocation = 6;
+
+      it("finalizeICO(): Ensures that PREICO tokens do not remain locked", async () => {
+
+            // Initialize token and ico contract
+            const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
+            const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 0, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
+            await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
+
+            // Try to finalize ICO before PREICO has been finalized
+            try {
+                await ico.finalizeICO({from: cofounderA, gas: gasAmount});
+            }
+            catch(e) {
+                ensureException(e);
+            }
+
+            // Check the pre-ico supply
+            let PREICOSupplyRemaining = await token.PREICOSupplyRemaining({from: cofounderA, gas: gasAmount});
+            assert.equal(WeiToETH(PREICOSupplyRemaining), 100000000, "Remaining Pre-ico supply should be 100,000,000 tokens");
+
+            // Finalize PREICO
+            await ico.finalizePREICO({from: cofounderA, gas: gasAmount});
+
+            // Try finalizing ICO again
+            await ico.finalizeICO({from: cofounderA, gas: gasAmount});
+
+           PREICOSupplyRemaining = await token.PREICOSupplyRemaining({from: cofounderA, gas: gasAmount});
+           assert.equal(PREICOSupplyRemaining.toNumber(), 0, "Pre-ico supply should have no tokens left");
+
+           ICOSupplyRemaining = await token.ICOSupplyRemaining({from: cofounderA, gas: gasAmount});
+           assert.equal(ICOSupplyRemaining.toNumber(), 0, "ICO supply should have no tokens left");
+
+           let tokensDistributed = await ico.tokensDistributed({from: cofounderA, gas: gasAmount});
+           assert.equal(WeiToETH(tokensDistributed), 500000000, "Tokens distributed should be the sum of PREICO and ICO");
+       });
 
       it("finalizeICO() + unlockTokens(): Tests unlocking transfers before and after ico", async () => {
 
@@ -61,6 +96,7 @@ contract("DNNICO", function(accounts) {
             const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
             const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 1 /* Ether */, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
             await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
+            await ico.finalizePREICO({from: cofounderA, gas: gasAmount});
 
             // Try unlocking the tokens by prematurely ending ICO
             try {
@@ -234,31 +270,23 @@ contract("DNNICO", function(accounts) {
 
       it("issueTokens(): Tests issuances of allocations not involving PRE-ICO and ICO", async () => {
 
-              // Deploy new token contract
+              // Create token and ico. Unlock tokens to test issuing tokens after sale
               const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
-
-              // Deploy new ico contract
               const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 0, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
-
-              // Set crowdfund contract
               await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
-
-              // Finalize ICO
+              await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
+              await ico.finalizePREICO({from: cofounderA, gas: gasAmount});
               await ico.finalizeICO({from: cofounderA, gas: gasAmount});
 
-              // Set allocator
-              await token.changeAllocator(cofounderA, {from: cofounderA, gas: gasAmount});
 
-              // Send tokens to advisory, check advisory's balance, and then remaining advisory tokens
+              // Test issuing tokens to ADVISIORY
               await token.issueTokens(advisory, ETHToWei(100000), AdvisorySupplyAllocation, {from: cofounderA, gas: gasAmount});
-
               const advisory_balance = await token.balanceOf(advisory, {from: advisory, gas: gasAmount});
               assert.equal(WeiToETH(advisory_balance), 100000, "The advisory should have 100,000 tokens");
-
               const advisory_supply_balance = await token.advisorySupplyRemaining.call({from: advisory, gas: gasAmount});
               assert.equal(WeiToETH(advisory_supply_balance), 119900000, "The advisory allocation remaining should be 119,900,000 tokens");
 
-              // Try sending more tokens than the early backer supply
+              // Test sending more than a supply allocation has
               try {
                   await token.issueTokens(earlyBacker, ETHToWei(120000000), EarlyBackerSupplyAllocation, {from: cofounderA, gas: gasAmount});
               }
@@ -266,36 +294,34 @@ contract("DNNICO", function(accounts) {
                 ensureException(e);
               }
 
-              // Send tokens to early backer
+              // Test issuing tokens to EARLY BACKERS
               await token.issueTokens(earlyBacker, ETHToWei(100000), EarlyBackerSupplyAllocation, {from: cofounderA, gas: gasAmount});
-
-              // Check to see if early backer balance is correct
               const earlyBacker_balance = await token.balanceOf(earlyBacker, {from: earlyBacker, gas: gasAmount});
               assert.equal(WeiToETH(earlyBacker_balance), 100000, "The early backer should have 100,000 tokens");
-
-              // Check to make sure the balance of the early backer supply is correct
               const earlyBacker_supply_balance = await token.earlyBackerSupplyRemaining.call({from: earlyBacker, gas: gasAmount});
               assert.equal(WeiToETH(earlyBacker_supply_balance), 99900000, "The early backer allocation remaining should be 99,900,000 tokens");
 
 
-              // Send tokens to writer account
+              // Test issuing tokens to WRITER ACCOUNTS
               await token.issueTokens(writerAccount, ETHToWei(100000), WriterAccountSupplyAllocation, {from: cofounderA, gas: gasAmount});
-
               const writerAccount_balance = await token.balanceOf(writerAccount, {from: writerAccount, gas: gasAmount});
               assert.equal(WeiToETH(writerAccount_balance), 100000, "The writer account should have 100,000 tokens");
-
               const writerAccount_supply_balance = await token.writerAccountSupplyRemaining.call({from: writerAccount, gas: gasAmount});
               assert.equal(WeiToETH(writerAccount_supply_balance), 39900000, "The writer account allocation remaining should be 39,900,000 tokens");
 
-
-              // Send tokens to bounty
+              // Test issuing tokens to BOUNTY CONTRIBUTORS
               await token.issueTokens(bountyContributor, ETHToWei(100000), BountySupplyAllocation, {from: cofounderA, gas: gasAmount});
-
               const bountyContributor_balance = await token.balanceOf(bountyContributor, {from: bountyContributor, gas: gasAmount});
               assert.equal(WeiToETH(bountyContributor_balance), 100000, "The bounty should have 100,000 tokens");
-
               const bountyContributor_supply_balance = await token.bountySupplyRemaining.call({from: bountyContributor, gas: gasAmount});
               assert.equal(WeiToETH(bountyContributor_supply_balance), 9900000, "The bounty allocation remaining should be 9,900,000 tokens");
+
+              // Test issuing tokens to PLATFORM
+              await token.issueTokens(user_address, ETHToWei(100000), PlatformSupplyAllocation, {from: platform, gas: gasAmount});
+              const user_balance = await token.balanceOf(user_address, {from: cofounderA, gas: gasAmount});
+              assert.equal(WeiToETH(user_balance), 100000, "The user should have 100,000 tokens");
+              const platform_supply_balance = await token.platformSupplyRemaining.call({from: cofounderA, gas: gasAmount});
+              assert.equal(WeiToETH(platform_supply_balance), 629900000, "The platform allocation remaining should be 629,900,000 tokens");
 
       })
 
@@ -457,6 +483,9 @@ contract("DNNICO", function(accounts) {
         // Check to see if the allocator has been changed
         allocator = await token.crowdfundContract.call();
         assert.equal(allocator == ico.address, true, "Allocator should be ICO address");
+
+        // Finalize PRE-ICo
+        await ico.finalizePREICO({from: cofounderA, gas: gasAmount});
 
         // Unlock tokens
         await ico.finalizeICO({from: cofounderA, gas: gasAmount});

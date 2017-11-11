@@ -445,11 +445,15 @@ contract DNNICO {
        onlyCofounders
        ICOHasEnded
     {
-        // Check if the tokens are either locked or we have tokens to transfer
-        require(dnnToken.tokensLocked() == true);
+        // Check if the tokens are either locked and all pre-sale tokens have been
+        // transferred to the ICO Supply before unlocking tokens.
+        require(dnnToken.tokensLocked() == true && dnnToken.PREICOSupplyRemaining() == 0);
 
         // Unlock tokens
         dnnToken.unlockTokens();
+
+        // Update tokens distributed
+        tokensDistributed += dnnToken.ICOSupplyRemaining();
 
         // Transfer unsold ICO tokens to platform
         dnnToken.sendUnsoldICOTokensToPlatform();
