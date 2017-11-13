@@ -72,8 +72,8 @@ contract DNNICO {
     // Keeps track of pre-ico contributors and how many tokens they are entitled to get based on their contribution //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     mapping(address => uint256) PREICOContributorTokensPendingRelease;
-    uint256 PREICOContributorsTokensPendingCount = 0;
-
+    uint256 PREICOContributorsTokensPendingCount = 0; // keep track of contributors waiting for tokens
+    uint256 PREICOContributorsPendingTokenCount = 0; // keep track of how many tokens need to be issued to presale contributors
 
     ///////////////////////////////////////////////////////////////////
     // Checks if all pre-ico contributors have received their tokens //
@@ -445,7 +445,7 @@ contract DNNICO {
        onlyCofounders
        ICOHasEnded
     {
-        // Check if the tokens are either locked and all pre-sale tokens have been
+        // Check if the tokens are locked and all pre-sale tokens have been
         // transferred to the ICO Supply before unlocking tokens.
         require(dnnToken.tokensLocked() == true && dnnToken.PREICOSupplyRemaining() == 0);
 
@@ -509,7 +509,7 @@ contract DNNICO {
 
         // Handle pre-sale contribution (tokens held, until tx confirmation from contributor)
         // Makes sure the user sends minimum PRE-ICO contribution, and that  pre-ico contributors
-        // are unable to send  subsequent ETH contributors before being issued tokens.
+        // are unable to send subsequent ETH contributors before being issued tokens.
         if (now < ICOStartDate && msg.value >= minimumPREICOContributionInWei && PREICOContributorTokensPendingRelease[msg.sender] == 0) {
 
             // Keep track of contributions (in Wei)
@@ -521,8 +521,16 @@ contract DNNICO {
             /// Make a note of how many tokens this user should get for their contribution to the presale
             PREICOContributorTokensPendingRelease[msg.sender] = PREICOContributorTokensPendingRelease[msg.sender].add(calculateTokens(msg.value, now));
 
+            // Keep track of pending tokens
+            PREICOContributorsPendingTokenCount += calculateTokens(msg.value, now);
+
             // Increment number of pre-ico contributors waiting for tokens
             PREICOContributorsTokensPendingCount += 1;
+
+            // Prevent contributions that will cause us to have a shortage of tokens during the pre-sale
+            if (PREICOContributorsPendingTokenCount > dnnToken.ICOSupplyRemaining()+dnnToken.PREICOSupplyRemaining()) {
+                revert();
+            }
 
             // Transfer contribution directly to multisig
             dnnHoldingMultisig.transfer(msg.value);

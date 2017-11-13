@@ -308,7 +308,7 @@ contract DNNToken is StandardToken {
     //////////////////
     // Issue tokens //
     //////////////////
-    function issueTokens(address beneficiary, uint tokenCount, DNNSupplyAllocations allocationType)
+    function issueTokens(address beneficiary, uint256 tokenCount, DNNSupplyAllocations allocationType)
       onlyAllocatorOrCrowdfundContractOrPlatform
       returns (bool)
     {
