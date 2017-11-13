@@ -393,13 +393,14 @@ contract DNNToken is StandardToken {
       onlyCrowdfundContract
     {
         // Make sure we have tokens to send from ICO
-        require(ICOSupplyRemaining > 0);
+        if (ICOSupplyRemaining > 0) {
 
-        // Add remaining ico tokens to platform remaining tokens
-        platformSupplyRemaining = platformSupplyRemaining.add(ICOSupplyRemaining);
+            // Add remaining ico tokens to platform remaining tokens
+            platformSupplyRemaining = platformSupplyRemaining.add(ICOSupplyRemaining);
 
-        // Clear remaining ico token count
-        ICOSupplyRemaining = 0;
+            // Clear remaining ico token count
+            ICOSupplyRemaining = 0;
+        }
     }
 
     /////////////////////////////////////////////////////
