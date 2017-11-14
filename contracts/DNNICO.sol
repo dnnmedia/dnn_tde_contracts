@@ -301,7 +301,7 @@ contract DNNICO {
         } else if (fundsRaisedInWei > maximumFundingGoalInETH.mul(60).div(100) && fundsRaisedInWei <= maximumFundingGoalInETH) {
             return tokenExchangeRateBase.mul(60).div(100);
 
-        // Default: 1 ETH = 3000 DNN (0 - 10,000 ether)
+        // Default: 1 ETH = 3000 DNN
         } else {
             return tokenExchangeRateBase;
         }
