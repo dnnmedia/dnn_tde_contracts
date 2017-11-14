@@ -73,7 +73,7 @@ contract DNNICO {
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     mapping(address => uint256) PREICOContributorTokensPendingRelease;
     uint256 PREICOContributorsTokensPendingCount = 0; // keep track of contributors waiting for tokens
-    uint256 PREICOContributorsPendingTokenCount = 0; // keep track of how many tokens need to be issued to presale contributors
+    uint256 TokensPurchasedDuringPREICO = 0; // keep track of how many tokens need to be issued to presale contributors
 
     ///////////////////////////////////////////////////////////////////
     // Checks if all pre-ico contributors have received their tokens //
@@ -522,13 +522,13 @@ contract DNNICO {
             PREICOContributorTokensPendingRelease[msg.sender] = PREICOContributorTokensPendingRelease[msg.sender].add(calculateTokens(msg.value, now));
 
             // Keep track of pending tokens
-            PREICOContributorsPendingTokenCount += calculateTokens(msg.value, now);
+            TokensPurchasedDuringPREICO += calculateTokens(msg.value, now);
 
             // Increment number of pre-ico contributors waiting for tokens
             PREICOContributorsTokensPendingCount += 1;
 
             // Prevent contributions that will cause us to have a shortage of tokens during the pre-sale
-            if (PREICOContributorsPendingTokenCount > dnnToken.ICOSupplyRemaining()+dnnToken.PREICOSupplyRemaining()) {
+            if (TokensPurchasedDuringPREICO > dnnToken.ICOSupplyRemaining()+dnnToken.PREICOSupplyRemaining()) {
                 revert();
             }
 
