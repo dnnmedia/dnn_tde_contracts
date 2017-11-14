@@ -398,13 +398,13 @@ contract("DNNICO", function(accounts) {
 
       });
 
-      it("function() + buyTokens(): accepts 1 ETH in exchange for DNN tokens during ICO at varies times", async () =>  {
+      it("function() + buyTokens(): accepts 1 ETH in exchange for DNN tokens during ICO at varies raises", async () =>  {
 
             // Deploy new token contract
             const token = await DNNToken.new(cofounderA, cofounderB, platform, ICOStartDate, {from: multisig, gas: gasAmount});
 
-            // Deploy new ico contract
-            const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, hardcap, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
+            // Deploy new ico contract (GOAL 10 Ether)
+            const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 10, ICOStartDate, ICOEndDate, {from: multisig, gas: gasAmount});
 
             // Set allocator
             await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
@@ -413,48 +413,42 @@ contract("DNNICO", function(accounts) {
             const buyerA_balance_one = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
             assert.equal(WeiToETH(buyerA_balance_one), 0, "The buyer should start with a 0 token balance");
 
-            // Buy tokens at first bonus range
-            await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("1", "Ether")});
+            // Buy tokens at first token rate (! ETH = 3000 DNN)
+            await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("3", "Ether")});
 
-           // Check balance after first token purchase
+           // Check balance after first token purchase (! ETH = 3000 DNN)
            const buyerA_balance_two = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(buyerA_balance_two), 3300, "The buyer should start with a 3300 token balance - First 48 hour bonus");
+           assert.equal(WeiToETH(buyerA_balance_two), 9000, "The buyer should start with a 9000 token balance");
 
-           // Progress time to after 48 hours
-           progressTimeBySeconds(3600 * 49);
+           // Send more to reach next token rate (1 ETH = 2400 DNN)
+           await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("5", "Ether")});
 
-           // Buy tokens at second bonus range
-           await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("1", "Ether")});
-
-           // Check balance after second token purchase
+           // Check balance after second token purchase (1 ETH = 2400 DNN)
            const buyerA_balance_three = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(buyerA_balance_three) - WeiToETH(buyerA_balance_two), 3150, "The buyer should have an additional 3150 tokens - After 48 hour bonus");
+           assert.equal(WeiToETH(buyerA_balance_three) - WeiToETH(buyerA_balance_two), 12000, "The buyer should have an additional 12000 tokens");
 
-           // Progress time to after 1 week to test next bonus range
-           progressTimeBySeconds(3600 * 24 * 8);
-
-           // Buy tokens at third bonus range
-           await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("1", "Ether")});
+           // Buy tokens at next token rate (1 ETH = 1800 DNN)
+           await web3.eth.sendTransaction({from: buyer_address, to: ico.address, gas: gasAmount, value: web3.toWei("2", "Ether")});
 
            // Check balance after third token purchase
            const buyerA_balance_four = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(buyerA_balance_four) - WeiToETH(buyerA_balance_three), 3000, "The buyer have an additional 3000 tokens - After Week 1 bonus");
+           assert.equal(WeiToETH(buyerA_balance_four) - WeiToETH(buyerA_balance_three), 3600, "The buyer have an additional 3600 tokens");
 
           // Check total tokens distributed from contract
            const tokensDistributed = await ico.tokensDistributed.call({from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(tokensDistributed), 9450, "The total tokens distributed should be 9450");
+           assert.equal(WeiToETH(tokensDistributed), 24600, "The total tokens distributed should be 24600");
 
            // Check buyer's total ETH contribution balance
            const buyerA_ETH_contribution = await ico.contributorETHBalance.call(buyer_address, {from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(buyerA_ETH_contribution), 3, "The total contribution of this buyer should be 3 ETH");
+           assert.equal(WeiToETH(buyerA_ETH_contribution), 10, "The total contribution of this buyer should be 10 ETH");
 
            // Check total balance of contract
            const fundsRaisedInWei = await ico.fundsRaisedInWei.call({from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(fundsRaisedInWei), 3, "The balance of the contract should be 3 ETH");
+           assert.equal(WeiToETH(fundsRaisedInWei), 10, "The balance of the contract should be 10 ETH");
 
            // Check if available ICO supply has been properly reduced (40% of 1 billion tokens  - 9450 tokens sold)
            const ICOSupplyRemaining = await token.ICOSupplyRemaining.call({from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(ICOSupplyRemaining), 399990550, "Remaining ICO balance should be 399,990,550 tokens");
+           assert.equal(WeiToETH(ICOSupplyRemaining), 399975400, "Remaining ICO balance should be 399,975,400 tokens");
 
       });
 
@@ -555,7 +549,7 @@ contract("DNNICO", function(accounts) {
 
             // Check platform supply
             let platformSupplyRemaining_balance = await token.platformSupplyRemaining.call({from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(platformSupplyRemaining_balance), 629967000, "The Platform supply should be 629,967,000");
+            assert.equal(WeiToETH(platformSupplyRemaining_balance), 629970000, "The Platform supply should be 629,970,000");
 
 
       });

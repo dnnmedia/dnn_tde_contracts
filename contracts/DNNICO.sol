@@ -60,7 +60,8 @@ contract DNNICO {
     //////////////////
     // Funds Raised //
     //////////////////
-    uint256 public fundsRaisedInWei;
+    uint256 public fundsRaisedInWei = 0;
+    uint256 public presaleFundsRaisedInWei = 0;
 
     ////////////////////////////////////////////
     // Keep track of Wei contributed per user //
@@ -190,6 +191,25 @@ contract DNNICO {
         cofounderB = newAddress;
     }
 
+    ////////////////////////////////////////
+    //  @des Function to extend pre-ico   //
+    //  @param new crowdsale start date   //
+    ////////////////////////////////////////
+    function extendPREICO(uint256 startDate)
+        onlyCofounders
+        returns (bool)
+    {
+        // Make sure that the new date is past the existing date and
+        // is not in the past.
+        if (startDate > now && startDate > ICOStartDate) {
+            ICOEndDate = ICOEndDate + (startDate-ICOStartDate); // Move end date the same amount of days as start date
+            ICOStartDate = startDate; // set new start date
+            return true;
+        }
+
+        return false;
+    }
+
     //////////////////////////////////////////////////////
     //  @des Function to change multisig address.       //
     //  @param newAddress Address of new multisig.      //
@@ -269,22 +289,19 @@ contract DNNICO {
             return uint256(0);
         }
 
-        // Determine how long the ICO has been running
-        uint256 icoDuration = timestamp.sub(ICOStartDate);
-
-        // Beyond Week 1 - 0% bonus
-        if (icoDuration > 1 weeks) {
+        // 1 ETH = 3000 DNN (0 - 20% of funding goal)
+        if (fundsRaisedInWei <= maximumFundingGoalInETH.mul(20).div(100)) {
             return tokenExchangeRateBase;
 
-        // After 48 hours - 5% bonus
-        } else if (icoDuration > 48 hours) {
-            return tokenExchangeRateBase + tokenExchangeRateBase.mul(5).div(100);
+        // 1 ETH = 2400 DNN (>20% to 60% of funding goal)
+        } else if (fundsRaisedInWei > maximumFundingGoalInETH.mul(20).div(100) && fundsRaisedInWei <= maximumFundingGoalInETH.mul(60).div(100)) {
+            return tokenExchangeRateBase.mul(80).div(100);
 
-        // First 48 hours - 10% bonus
-        } else if (icoDuration <= 48 hours) {
-            return tokenExchangeRateBase + tokenExchangeRateBase.mul(10).div(100);
+        // 1 ETH = 1800 DNN (>60% to Funding Goal)
+        } else if (fundsRaisedInWei > maximumFundingGoalInETH.mul(60).div(100) && fundsRaisedInWei <= maximumFundingGoalInETH) {
+            return tokenExchangeRateBase.mul(60).div(100);
 
-        // Default - 0% bonus
+        // Default: 1 ETH = 3000 DNN (0 - 10,000 ether)
         } else {
             return tokenExchangeRateBase;
         }
@@ -392,6 +409,9 @@ contract DNNICO {
 
           // Increase total funds raised by contribution
           fundsRaisedInWei = fundsRaisedInWei.add(weiamount);
+
+          // Keep track of presale funds in addition, separately
+          presaleFundsRaisedInWei = presaleFundsRaisedInWei.add(weiamount);
 
           // Add these tokens to the total amount of tokens this contributor is entitled to
           PREICOContributorTokensPendingRelease[beneficiary] = PREICOContributorTokensPendingRelease[beneficiary].add(tokenCount);
@@ -517,6 +537,9 @@ contract DNNICO {
 
             // Increase total funds raised by contribution
             fundsRaisedInWei = fundsRaisedInWei.add(msg.value);
+
+            // Keep track of presale funds in addition, separately
+            presaleFundsRaisedInWei = presaleFundsRaisedInWei.add(msg.value);
 
             /// Make a note of how many tokens this user should get for their contribution to the presale
             PREICOContributorTokensPendingRelease[msg.sender] = PREICOContributorTokensPendingRelease[msg.sender].add(calculateTokens(msg.value, now));
