@@ -55,6 +55,31 @@ contract("DNNICO", function(accounts) {
       let AdvisorySupplyAllocation = 5;
       let PlatformSupplyAllocation = 6;
 
+      it("extendPREICO(): Test extending presale", async () => {
+
+            let starts = 1512162070; // Tuesday, December 1, 2017 9:01:10 PM
+            let ends = 1514754070; // Wednesday, December 31, 2017 9:01:10 PM
+
+            // Initialize token and ico contract
+            const token = await DNNToken.new(cofounderA, cofounderB, platform, starts, {from: multisig, gas: gasAmount});
+            const ico = await DNNICO.new(token.address, cofounderA, cofounderB, multisig, 0, starts, ends, {from: multisig, gas: gasAmount});
+            await token.changeCrowdfundContract(ico.address, {from: cofounderA, gas: gasAmount});
+
+            let startDate = await ico.ICOStartDate({from: cofounderA, gas: gasAmount});
+            assert.equal(startDate.toNumber(), starts, "The start date should be " + starts);
+
+            // Move start date by 1 year
+            await ico.extendPREICO(1543698070, {from: cofounderA, gas: gasAmount});
+
+            // Check if the start date is what we just set
+            startDate = await ico.ICOStartDate({from: cofounderA, gas: gasAmount});
+            assert.equal(startDate.toNumber(), 1543698070, "The start date should be " + 1543698070);
+
+            // Check if the end date moved an equal distance from the new start date
+            let endDate = await ico.ICOEndDate({from: cofounderA, gas: gasAmount});
+            assert.equal(endDate.toNumber(), 1546290070, "The end date should be " + 1546290070);
+      });
+
       it("finalizeICO(): Ensures that PREICO tokens do not remain locked", async () => {
 
             // Initialize token and ico contract
