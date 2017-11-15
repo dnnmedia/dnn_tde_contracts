@@ -1,6 +1,6 @@
-## DNN Token and ICO Contracts
+## DNN Token and TDE Contracts
 
-The DNN team is all about transparency. We welcome the community to audit our token, pre-ico, and ico contracts. If you have any questions about the code, have any feedback, or would like to report a bug- please do not hesitate to reach out to [any member of our team](https://dnn.media/team) on any of our social channels.
+The DNN team is all about transparency. We welcome the community to audit our token, pre-tde, and tde contracts. If you have any questions about the code, have any feedback, or would like to report a bug- please do not hesitate to reach out to [any member of our team](https://dnn.media/team) on any of our social channels.
 
 ## What is DNN?
 Decentralized News Network is a political news platform that combines news creation with
