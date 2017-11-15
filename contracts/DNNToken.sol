@@ -16,8 +16,8 @@ contract DNNToken is StandardToken {
     ////////////////////////////////////////////////////////////
     enum DNNSupplyAllocations {
         EarlyBackerSupplyAllocation,
-        PREICOSupplyAllocation,
-        ICOSupplyAllocation,
+        PRETDESupplyAllocation,
+        TDESupplyAllocation,
         BountySupplyAllocation,
         WriterAccountSupplyAllocation,
         AdvisorySupplyAllocation,
@@ -52,8 +52,8 @@ contract DNNToken is StandardToken {
     // Token Distributions (% of total supply) //
     /////////////////////////////////////////////
     uint256 public earlyBackerSupply; // 10%
-    uint256 public PREICOSupply; // 10%
-    uint256 public ICOSupply; // 40%
+    uint256 public PRETDESupply; // 10%
+    uint256 public TDESupply; // 40%
     uint256 public bountySupply; // 1%
     uint256 public writerAccountSupply; // 4%
     uint256 public advisorySupply; // 12%
@@ -61,8 +61,8 @@ contract DNNToken is StandardToken {
     uint256 public platformSupply; // 13%
 
     uint256 public earlyBackerSupplyRemaining; // 10%
-    uint256 public PREICOSupplyRemaining; // 10%
-    uint256 public ICOSupplyRemaining; // 40%
+    uint256 public PRETDESupplyRemaining; // 10%
+    uint256 public TDESupplyRemaining; // 40%
     uint256 public bountySupplyRemaining; // 1%
     uint256 public writerAccountSupplyRemaining; // 4%
     uint256 public advisorySupplyRemaining; // 12%
@@ -323,25 +323,25 @@ contract DNNToken is StandardToken {
             earlyBackerSupplyRemaining = earlyBackerSupplyRemaining.sub(tokenCount);
         }
 
-        // PRE-ICO
-        else if (canCrowdfundContractPerform && msg.sender == crowdfundContract && allocationType == DNNSupplyAllocations.PREICOSupplyAllocation) {
+        // PRE-TDE
+        else if (canCrowdfundContractPerform && msg.sender == crowdfundContract && allocationType == DNNSupplyAllocations.PRETDESupplyAllocation) {
 
               // Check to see if we have enough tokens to satisfy this purchase
-              // using just the pre-ico.
-              if (PREICOSupplyRemaining >= tokenCount) {
+              // using just the pre-tde.
+              if (PRETDESupplyRemaining >= tokenCount) {
 
-                    // Decrease pre-ico supply
-                    PREICOSupplyRemaining = PREICOSupplyRemaining.sub(tokenCount);
+                    // Decrease pre-tde supply
+                    PRETDESupplyRemaining = PRETDESupplyRemaining.sub(tokenCount);
               }
 
-              // Check to see if we can satisfy this using pre-ico and ico supply combined
-              else if (PREICOSupplyRemaining+ICOSupplyRemaining >= tokenCount) {
+              // Check to see if we can satisfy this using pre-tde and tde supply combined
+              else if (PRETDESupplyRemaining+TDESupplyRemaining >= tokenCount) {
 
-                    // Decrease ico supply
-                    ICOSupplyRemaining = ICOSupplyRemaining.sub(tokenCount-PREICOSupplyRemaining);
+                    // Decrease tde supply
+                    TDESupplyRemaining = TDESupplyRemaining.sub(tokenCount-PRETDESupplyRemaining);
 
-                    // Decrease pre-ico supply by its' remaining tokens
-                    PREICOSupplyRemaining = 0;
+                    // Decrease pre-tde supply by its' remaining tokens
+                    PRETDESupplyRemaining = 0;
               }
 
               // Otherwise, we can't satisfy this sale because we don't have enough tokens.
@@ -350,9 +350,9 @@ contract DNNToken is StandardToken {
               }
         }
 
-        // ICO
-        else if (canCrowdfundContractPerform && allocationType == DNNSupplyAllocations.ICOSupplyAllocation && tokenCount <= ICOSupplyRemaining) {
-            ICOSupplyRemaining = ICOSupplyRemaining.sub(tokenCount);
+        // TDE
+        else if (canCrowdfundContractPerform && allocationType == DNNSupplyAllocations.TDESupplyAllocation && tokenCount <= TDESupplyRemaining) {
+            TDESupplyRemaining = TDESupplyRemaining.sub(tokenCount);
         }
 
         // Bounty
@@ -386,38 +386,38 @@ contract DNNToken is StandardToken {
     }
 
     /////////////////////////////////////////////////
-    // Transfer Unsold tokens from ICO to Platform //
+    // Transfer Unsold tokens from TDE to Platform //
     /////////////////////////////////////////////////
-    function sendUnsoldICOTokensToPlatform()
+    function sendUnsoldTDETokensToPlatform()
       external
       onlyCrowdfundContract
     {
-        // Make sure we have tokens to send from ICO
-        if (ICOSupplyRemaining > 0) {
+        // Make sure we have tokens to send from TDE
+        if (TDESupplyRemaining > 0) {
 
-            // Add remaining ico tokens to platform remaining tokens
-            platformSupplyRemaining = platformSupplyRemaining.add(ICOSupplyRemaining);
+            // Add remaining tde tokens to platform remaining tokens
+            platformSupplyRemaining = platformSupplyRemaining.add(TDESupplyRemaining);
 
-            // Clear remaining ico token count
-            ICOSupplyRemaining = 0;
+            // Clear remaining tde token count
+            TDESupplyRemaining = 0;
         }
     }
 
     /////////////////////////////////////////////////////
-    // Transfer Unsold tokens from pre-ICO to Platform //
+    // Transfer Unsold tokens from pre-TDE to Platform //
     /////////////////////////////////////////////////////
-    function sendUnsoldPREICOTokensToICO()
+    function sendUnsoldPRETDETokensToTDE()
       external
       onlyCrowdfundContract
     {
-          // Make sure we have tokens to send from pre-ICO
-          if (PREICOSupplyRemaining > 0) {
+          // Make sure we have tokens to send from pre-TDE
+          if (PRETDESupplyRemaining > 0) {
 
-              // Add remaining pre-ico tokens to ico remaining tokens
-              ICOSupplyRemaining = ICOSupplyRemaining.add(PREICOSupplyRemaining);
+              // Add remaining pre-tde tokens to tde remaining tokens
+              TDESupplyRemaining = TDESupplyRemaining.add(PRETDESupplyRemaining);
 
-              // Clear remaining pre-ico token count
-              PREICOSupplyRemaining = 0;
+              // Clear remaining pre-tde token count
+              PRETDESupplyRemaining = 0;
         }
     }
 
@@ -452,8 +452,8 @@ contract DNNToken is StandardToken {
 
           // Set Token Distributions (% of total supply)
           earlyBackerSupply = totalSupply.mul(10).div(100); // 10%
-          PREICOSupply = totalSupply.mul(10).div(100); // 10%
-          ICOSupply = totalSupply.mul(40).div(100); // 40%
+          PRETDESupply = totalSupply.mul(10).div(100); // 10%
+          TDESupply = totalSupply.mul(40).div(100); // 40%
           bountySupply = totalSupply.mul(1).div(100); // 1%
           writerAccountSupply = totalSupply.mul(4).div(100); // 4%
           advisorySupply = totalSupply.mul(12).div(100); // 12%
@@ -462,8 +462,8 @@ contract DNNToken is StandardToken {
 
           // Set each remaining token count equal to its' respective supply
           earlyBackerSupplyRemaining = earlyBackerSupply;
-          PREICOSupplyRemaining = PREICOSupply;
-          ICOSupplyRemaining = ICOSupply;
+          PRETDESupplyRemaining = PRETDESupply;
+          TDESupplyRemaining = TDESupply;
           bountySupplyRemaining = bountySupply;
           writerAccountSupplyRemaining = writerAccountSupply;
           advisorySupplyRemaining = advisorySupply;
