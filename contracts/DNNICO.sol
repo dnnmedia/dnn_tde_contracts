@@ -197,6 +197,7 @@ contract DNNICO {
     ////////////////////////////////////////
     function extendPREICO(uint256 startDate)
         onlyCofounders
+        PREICOHasNotEnded
         returns (bool)
     {
         // Make sure that the new date is past the existing date and
@@ -289,17 +290,17 @@ contract DNNICO {
             return uint256(0);
         }
 
-        // 1 ETH = 3000 DNN (0 - 20% of funding goal)
+        // 1 ETH = 3600 DNN (0 - 20% of funding goal) - 20% Bonus
         if (fundsRaisedInWei <= maximumFundingGoalInETH.mul(20).div(100)) {
-            return tokenExchangeRateBase;
+            return tokenExchangeRateBase.mul(120).div(100);
 
-        // 1 ETH = 2400 DNN (>20% to 60% of funding goal)
+        // 1 ETH = 3450 DNN (>20% to 60% of funding goal) - 15% Bonus
         } else if (fundsRaisedInWei > maximumFundingGoalInETH.mul(20).div(100) && fundsRaisedInWei <= maximumFundingGoalInETH.mul(60).div(100)) {
-            return tokenExchangeRateBase.mul(80).div(100);
+            return tokenExchangeRateBase.mul(115).div(100);
 
-        // 1 ETH = 1800 DNN (>60% to Funding Goal)
+        // 1 ETH = 3300 DNN (>60% to Funding Goal) - 10% Bonus
         } else if (fundsRaisedInWei > maximumFundingGoalInETH.mul(60).div(100) && fundsRaisedInWei <= maximumFundingGoalInETH) {
-            return tokenExchangeRateBase.mul(60).div(100);
+            return tokenExchangeRateBase.mul(110).div(100);
 
         // Default: 1 ETH = 3000 DNN
         } else {
@@ -320,21 +321,21 @@ contract DNNICO {
             return uint256(0);
         }
 
-        // 100 ETH - 199 ETH Bonus
+        // 100 ETH - 199 ETH (25% Bonus)
         if (weiamount >= 100 ether && weiamount <= 199 ether) {
-            return tokenExchangeRateBase + tokenExchangeRateBase.mul(15).div(100);
-
-        // 200 ETH - 300 ETH Bonus
-        } else if (weiamount >= 200 ether && weiamount <= 300 ether) {
-            return tokenExchangeRateBase + tokenExchangeRateBase.mul(20).div(100);
-
-        // 301 ETH - 2665 ETH Bonus
-        } else if (weiamount >= 301 ether && weiamount <= 2665 ether) {
             return tokenExchangeRateBase + tokenExchangeRateBase.mul(25).div(100);
 
-        // 2666+ ETH Bonus
+        // 200 ETH - 300 ETH Bonus (30% Bonus)
+        } else if (weiamount >= 200 ether && weiamount <= 300 ether) {
+            return tokenExchangeRateBase + tokenExchangeRateBase.mul(30).div(100);
+
+        // 301 ETH - 2665 ETH Bonus (35% Bonus)
+        } else if (weiamount >= 301 ether && weiamount <= 2665 ether) {
+            return tokenExchangeRateBase + tokenExchangeRateBase.mul(35).div(100);
+
+        // 2666+ ETH Bonus (50% Bonus)
         } else {
-            return tokenExchangeRateBase + tokenExchangeRateBase.mul(40).div(100);
+            return tokenExchangeRateBase + tokenExchangeRateBase.mul(50).div(100);
         }
     }
 
