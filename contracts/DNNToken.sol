@@ -82,6 +82,11 @@ contract DNNToken is StandardToken {
     //////////////////////////////////////////////
     bool public tokensLocked = true;
 
+    /////////////////////////////////////////////////////////////////////////////
+    // Event triggered when tokens are transferred from one address to another //
+    /////////////////////////////////////////////////////////////////////////////
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
     ////////////////////////////////////////////////////////////
     // Checks if tokens can be issued to founder at this time //
     ////////////////////////////////////////////////////////////
@@ -256,6 +261,7 @@ contract DNNToken is StandardToken {
       TokensUnlocked
       returns (bool)
     {
+          Transfer(msg.sender, _to, _value);
           return BasicToken.transfer(_to, _value);
     }
 
@@ -266,6 +272,7 @@ contract DNNToken is StandardToken {
       TokensUnlocked
       returns (bool)
     {
+          Transfer(_from, _to, _value);
           return StandardToken.transferFrom(_from, _to, _value);
     }
 
