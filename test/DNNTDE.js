@@ -188,7 +188,7 @@ contract("DNNTDE", function(accounts) {
 
               // Attempt to purchase tokens using an amount lower than presale minimum
               try {
-                await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("99", "Ether")});
+                await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("49", "Ether")});
               }
               catch (e) {
                 ensureException(e);

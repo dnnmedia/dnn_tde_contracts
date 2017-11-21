@@ -50,7 +50,7 @@ contract DNNTDE {
     // Minumum Contributions for pre-TDE and TDE //
     ///////////////////////////////////////////////
     uint256 public minimumTDEContributionInWei = 0.001 ether;
-    uint256 public minimumPRETDEContributionInWei = 100 ether;
+    uint256 public minimumPRETDEContributionInWei = 50 ether;
 
     //////////////////////
     // Funding Hard cap //
@@ -321,8 +321,8 @@ contract DNNTDE {
             return uint256(0);
         }
 
-        // 100 ETH - 199 ETH (25% Bonus)
-        if (weiamount >= 100 ether && weiamount <= 199 ether) {
+        // 50 ETH - 199 ETH (25% Bonus)
+        if (weiamount >= 50 ether && weiamount <= 199 ether) {
             return tokenExchangeRateBase + tokenExchangeRateBase.mul(25).div(100);
 
         // 200 ETH - 300 ETH Bonus (30% Bonus)
