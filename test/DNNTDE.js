@@ -40,7 +40,7 @@ contract("DNNTDE", function(accounts) {
       let bountyContributor = accounts[6];
       let platform = accounts[7];
 
-      let hardcap = 100000
+      let hardcap = 70000;
       let gasAmount = 3000000;
       let buyer_address = accounts[8];
       let user_address = accounts[9];
@@ -188,7 +188,7 @@ contract("DNNTDE", function(accounts) {
 
               // Attempt to purchase tokens using an amount lower than presale minimum
               try {
-                await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("49", "Ether")});
+                await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("4", "Ether")});
               }
               catch (e) {
                 ensureException(e);
