@@ -309,11 +309,11 @@ contract("DNNTDE", function(accounts) {
               const advisory_balance = await token.balanceOf(advisory, {from: advisory, gas: gasAmount});
               assert.equal(WeiToETH(advisory_balance), 100000, "The advisory should have 100,000 tokens");
               const advisory_supply_balance = await token.advisorySupplyRemaining.call({from: advisory, gas: gasAmount});
-              assert.equal(WeiToETH(advisory_supply_balance), 119900000, "The advisory allocation remaining should be 119,900,000 tokens");
+              assert.equal(WeiToETH(advisory_supply_balance), 139900000, "The advisory allocation remaining should be 139,900,000 tokens");
 
-              // Test sending more than a supply allocation has
+              // Test sending more than advisory supply allocation has
               try {
-                  await token.issueTokens(earlyBacker, ETHToWei(120000000), EarlyBackerSupplyAllocation, {from: cofounderA, gas: gasAmount});
+                  await token.issueTokens(earlyBacker, ETHToWei(140000000), EarlyBackerSupplyAllocation, {from: cofounderA, gas: gasAmount});
               }
               catch (e) {
                 ensureException(e);
@@ -346,7 +346,7 @@ contract("DNNTDE", function(accounts) {
               const user_balance = await token.balanceOf(user_address, {from: cofounderA, gas: gasAmount});
               assert.equal(WeiToETH(user_balance), 100000, "The user should have 100,000 tokens");
               const platform_supply_balance = await token.platformSupplyRemaining.call({from: cofounderA, gas: gasAmount});
-              assert.equal(WeiToETH(platform_supply_balance), 629900000, "The platform allocation remaining should be 629,900,000 tokens");
+              assert.equal(WeiToETH(platform_supply_balance), 609900000, "The platform allocation remaining should be 609,900,000 tokens");
 
       })
 
@@ -387,7 +387,7 @@ contract("DNNTDE", function(accounts) {
 
             // Check remaining supply of TDE
             let platformSupplyRemaining_balance = await token.platformSupplyRemaining.call({from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(platformSupplyRemaining_balance), 530000000, "The Platform supply should be 530,000,000");
+            assert.equal(WeiToETH(platformSupplyRemaining_balance), 510000000, "The Platform supply should be 510,000,000");
       });
 
       it("function() + buyTokens(): Tests whether contract allows contributions that exceed goal", async () => {
@@ -574,7 +574,7 @@ contract("DNNTDE", function(accounts) {
 
             // Check platform supply
             let platformSupplyRemaining_balance = await token.platformSupplyRemaining.call({from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(platformSupplyRemaining_balance), 629964000, "The Platform supply should be 629,964,000");
+            assert.equal(WeiToETH(platformSupplyRemaining_balance), 609964000, "The Platform supply should be 609,964,000");
 
 
       });

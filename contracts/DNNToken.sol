@@ -56,18 +56,18 @@ contract DNNToken is StandardToken {
     uint256 public TDESupply; // 40%
     uint256 public bountySupply; // 1%
     uint256 public writerAccountSupply; // 4%
-    uint256 public advisorySupply; // 12%
+    uint256 public advisorySupply; // 14%
     uint256 public cofoundersSupply; // 10%
-    uint256 public platformSupply; // 13%
+    uint256 public platformSupply; // 11%
 
     uint256 public earlyBackerSupplyRemaining; // 10%
     uint256 public PRETDESupplyRemaining; // 10%
     uint256 public TDESupplyRemaining; // 40%
     uint256 public bountySupplyRemaining; // 1%
     uint256 public writerAccountSupplyRemaining; // 4%
-    uint256 public advisorySupplyRemaining; // 12%
+    uint256 public advisorySupplyRemaining; // 14%
     uint256 public cofoundersSupplyRemaining; // 10%
-    uint256 public platformSupplyRemaining; // 13%
+    uint256 public platformSupplyRemaining; // 11%
 
     ////////////////////////////////////////////////////////////////////////////////////
     // Amount of CoFounder Supply that has been distributed based on vesting schedule //
@@ -463,9 +463,9 @@ contract DNNToken is StandardToken {
           TDESupply = totalSupply.mul(40).div(100); // 40%
           bountySupply = totalSupply.mul(1).div(100); // 1%
           writerAccountSupply = totalSupply.mul(4).div(100); // 4%
-          advisorySupply = totalSupply.mul(12).div(100); // 12%
+          advisorySupply = totalSupply.mul(14).div(100); // 14%
           cofoundersSupply = totalSupply.mul(10).div(100); // 10%
-          platformSupply = totalSupply.mul(13).div(100); // 13%
+          platformSupply = totalSupply.mul(11).div(100); // 11%
 
           // Set each remaining token count equal to its' respective supply
           earlyBackerSupplyRemaining = earlyBackerSupply;
