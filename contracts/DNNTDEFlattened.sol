@@ -1,4 +1,4 @@
-pragma solidity ^0.4.13;
+pragma solidity ^0.4.15;
 
 contract ERC20Basic {
   uint256 public totalSupply;
@@ -1186,4 +1186,3 @@ contract DNNToken is StandardToken {
           cofoundersSupplyVestingStartDate = vestingStartDate >= now ? vestingStartDate : now;
     }
 }
-

@@ -1,4 +1,4 @@
-pragma solidity ^0.4.13;
+pragma solidity ^0.4.15;
 
 library SafeMath {
   function mul(uint256 a, uint256 b) internal constant returns (uint256) {
@@ -624,4 +624,3 @@ contract DNNToken is StandardToken {
           cofoundersSupplyVestingStartDate = vestingStartDate >= now ? vestingStartDate : now;
     }
 }
-
