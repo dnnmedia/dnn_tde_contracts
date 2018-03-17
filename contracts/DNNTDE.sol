@@ -62,11 +62,17 @@ contract DNNTDE {
     //////////////////
     uint256 public fundsRaisedInWei = 0;
     uint256 public presaleFundsRaisedInWei = 0;
+    uint256 public tdeFundsRaisedInWei = 0;
 
     ////////////////////////////////////////////
     // Keep track of Wei contributed per user //
     ////////////////////////////////////////////
     mapping(address => uint256) ETHContributions;
+
+    ////////////////////////////////////////////////
+    // Keeps track of tokens per eth contribution //
+    ////////////////////////////////////////////////
+    mapping(address => uint256) ETHContributorTokens;
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,14 +82,43 @@ contract DNNTDE {
     uint256 PRETDEContributorsTokensPendingCount = 0; // keep track of contributors waiting for tokens
     uint256 TokensPurchasedDuringPRETDE = 0; // keep track of how many tokens need to be issued to presale contributors
 
+
+    //////////////////
+    // Bonus ranges //
+    //////////////////
+    bool public trickleDownBonusesReleased = false;
+    uint256 public rangeETHAmount = 0;
+    uint256 public bonusRangeCount = 4;
+
+    uint256 public tokensIssuedForBonusRangeOne    = 0;
+    uint256 public tokensIssuedForBonusRangeTwo    = 0;
+    uint256 public tokensIssuedForBonusRangeThree  = 0;
+    uint256 public tokensIssuedForBonusRangeFour   = 0;
+
+    uint256 public bonusRangeOneAddressCount   = 0;
+    uint256 public bonusRangeTwoAddressCount   = 0;
+    uint256 public bonusRangeThreeAddressCount = 0;
+    uint256 public bonusRangeFourAddressCount  = 0;
+
+    mapping(uint256 => address) bonusRangeOne;   // 20%
+    mapping(uint256 => address) bonusRangeTwo;   // 15%
+    mapping(uint256 => address) bonusRangeThree; // 10%
+    mapping(uint256 => address) bonusRangeFour;  // 5%
+
+    //////////////////////////////////////////////////////
+    // Checks if trickle down bonuses not been released //
+    //////////////////////////////////////////////////////
+    modifier HasTrickleDownBonusesNotBeenReleased() {
+        require (trickleDownBonusesReleased == false);
+        _;
+    }
+
     ///////////////////////////////////////////////////////////////////
     // Checks if all pre-tde contributors have received their tokens //
     ///////////////////////////////////////////////////////////////////
     modifier NoPRETDEContributorsAwaitingTokens() {
-
         // Determine if all pre-tde contributors have received tokens
         require(PRETDEContributorsTokensPendingCount == 0);
-
         _;
     }
 
@@ -122,14 +157,6 @@ contract DNNTDE {
         _;
     }
 
-    //////////////////////////////////////
-    // Check if the pre-tde is going on //
-    //////////////////////////////////////
-    modifier PRETDEHasNotEnded() {
-       require (now < TDEStartDate);
-       _;
-    }
-
     ////////////////////////////////s
     // Check if the tde has ended //
     ////////////////////////////////
@@ -152,6 +179,15 @@ contract DNNTDE {
     modifier ContributionDoesNotCauseGoalExceedance() {
        uint256 newFundsRaised = msg.value+fundsRaisedInWei;
        require (newFundsRaised <= maximumFundingGoalInETH);
+       _;
+    }
+
+    ///////////////////////////////////////////////////////////////
+    // Make sure max cap is not exceeded with added contribution //
+    ///////////////////////////////////////////////////////////////
+    modifier TDETokensLeft() {
+       uint256 tokensDistributedPlusBonuses = tokensIssuedForBonusRangeOne.mul(150).div(100) + tokensIssuedForBonusRangeTwo.mul(130).div(100) + tokensIssuedForBonusRangeThree.mul(115).div(100) + tokensIssuedForBonusRangeFour.mul(105).div(100);
+       require (tokensDistributedPlusBonuses < dnnToken.TDESupplyRemaining());
        _;
     }
 
@@ -192,12 +228,29 @@ contract DNNTDE {
     }
 
     ////////////////////////////////////////
+    //  @des Function to extend tde       //
+    //  @param new crowdsale start date   //
+    ////////////////////////////////////////
+    function extendTDE(uint256 endDate)
+        onlyCofounders
+        returns (bool)
+    {
+        // Make sure that the new date is past the existing date and
+        // is not in the past.
+        if (endDate > now && endDate > TDEEndDate) {
+            TDEEndDate = endDate;
+            return true;
+        }
+
+        return false;
+    }
+
+    ////////////////////////////////////////
     //  @des Function to extend pre-tde   //
     //  @param new crowdsale start date   //
     ////////////////////////////////////////
     function extendPRETDE(uint256 startDate)
         onlyCofounders
-        PRETDEHasNotEnded
         returns (bool)
     {
         // Make sure that the new date is past the existing date and
@@ -290,20 +343,23 @@ contract DNNTDE {
             return uint256(0);
         }
 
-        // 1 ETH = 3600 DNN (0 - 20% of funding goal) - 20% Bonus
-        if (fundsRaisedInWei <= maximumFundingGoalInETH.mul(20).div(100)) {
+        // Bonus One --> 0 - 25% of raise
+        if (tdeFundsRaisedInWei <= rangeETHAmount) {
             return tokenExchangeRateBase.mul(120).div(100);
-
-        // 1 ETH = 3450 DNN (>20% to 60% of funding goal) - 15% Bonus
-        } else if (fundsRaisedInWei > maximumFundingGoalInETH.mul(20).div(100) && fundsRaisedInWei <= maximumFundingGoalInETH.mul(60).div(100)) {
+        }
+        // Bonus Two --> 25% - 50% of raise
+        else if (tdeFundsRaisedInWei > rangeETHAmount && tdeFundsRaisedInWei <= rangeETHAmount.mul(2)) {
             return tokenExchangeRateBase.mul(115).div(100);
-
-        // 1 ETH = 3300 DNN (>60% to Funding Goal) - 10% Bonus
-        } else if (fundsRaisedInWei > maximumFundingGoalInETH.mul(60).div(100) && fundsRaisedInWei <= maximumFundingGoalInETH) {
+        }
+        // Bonus Three --> 50% - 75% of raise
+        else if (tdeFundsRaisedInWei > rangeETHAmount.mul(2) && tdeFundsRaisedInWei <= rangeETHAmount.mul(3)) {
             return tokenExchangeRateBase.mul(110).div(100);
-
-        // Default: 1 ETH = 3000 DNN
-        } else {
+        }
+        // Bonus Four --> 75% - 100% of raise
+        else if (tdeFundsRaisedInWei > rangeETHAmount.mul(3) && tdeFundsRaisedInWei <= maximumFundingGoalInETH) {
+            return tokenExchangeRateBase.mul(105).div(100);
+        }
+        else {
             return tokenExchangeRateBase;
         }
     }
@@ -365,11 +421,40 @@ contract DNNTDE {
         internal
         ContributionIsAtLeastMinimum
         ContributionDoesNotCauseGoalExceedance
+        TDETokensLeft
         returns (bool)
     {
-
         // Determine how many tokens should be issued
         uint256 tokenCount = calculateTokens(msg.value, now);
+
+        // Before adding the contributor to a bonus range
+        // make sure that this is the first time they have contributed
+        if (ETHContributorTokens[msg.sender] == 0) {
+            // Bonus One
+            if (tdeFundsRaisedInWei <= rangeETHAmount) {
+                tokensIssuedForBonusRangeOne = tokensIssuedForBonusRangeOne.add(tokenCount);
+                bonusRangeOne[bonusRangeOneAddressCount] = msg.sender;
+                bonusRangeOneAddressCount = bonusRangeOneAddressCount.add(1);
+            }
+            // Bonus Two
+            else if (tdeFundsRaisedInWei > rangeETHAmount && tdeFundsRaisedInWei <= rangeETHAmount.mul(2)) {
+                tokensIssuedForBonusRangeTwo = tokensIssuedForBonusRangeTwo.add(tokenCount);
+                bonusRangeTwo[bonusRangeTwoAddressCount] = msg.sender;
+                bonusRangeTwoAddressCount = bonusRangeTwoAddressCount.add(1);
+            }
+            // Bonus Three
+            else if (tdeFundsRaisedInWei > rangeETHAmount.mul(2) && tdeFundsRaisedInWei <= rangeETHAmount.mul(3)) {
+                tokensIssuedForBonusRangeThree = tokensIssuedForBonusRangeThree.add(tokenCount);
+                bonusRangeThree[bonusRangeThreeAddressCount] = msg.sender;
+                bonusRangeThreeAddressCount = bonusRangeThreeAddressCount.add(1);
+            }
+            // Bonus Four
+            else if (tdeFundsRaisedInWei > rangeETHAmount.mul(3) && tdeFundsRaisedInWei <= maximumFundingGoalInETH) {
+                tokensIssuedForBonusRangeFour = tokensIssuedForBonusRangeFour.add(tokenCount);
+                bonusRangeFour[bonusRangeFourAddressCount] = msg.sender;
+                bonusRangeFourAddressCount = bonusRangeFourAddressCount.add(1);
+            }
+        }
 
         // Update total amount of tokens distributed (in atto-DNN)
         tokensDistributed = tokensDistributed.add(tokenCount);
@@ -377,8 +462,14 @@ contract DNNTDE {
         // Keep track of contributions (in Wei)
         ETHContributions[msg.sender] = ETHContributions[msg.sender].add(msg.value);
 
+        // Keep track of how much tokens are issued to each contributor
+        ETHContributorTokens[msg.sender] = ETHContributorTokens[msg.sender].add(tokenCount);
+
         // Increase total funds raised by contribution
         fundsRaisedInWei = fundsRaisedInWei.add(msg.value);
+
+        // Increase tde total funds raised by contribution
+        tdeFundsRaisedInWei = tdeFundsRaisedInWei.add(msg.value);
 
         // Determine which token allocation we should be deducting from
         DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.TDESupplyAllocation;
@@ -401,10 +492,13 @@ contract DNNTDE {
     ////////////////////////////////////////////////////////////////////////////////////////
     function buyPRETDETokensWithoutETH(address beneficiary, uint256 weiamount, uint256 tokenCount)
         onlyCofounders
-        PRETDEHasNotEnded
         IsNotAwaitingPRETDETokens(beneficiary)
         returns (bool)
     {
+
+          // Keep track of how much tokens are issued to each contributor
+          ETHContributorTokens[beneficiary] = ETHContributorTokens[beneficiary].add(tokenCount);
+
           // Keep track of contributions (in Wei)
           ETHContributions[beneficiary] = ETHContributions[beneficiary].add(weiamount);
 
@@ -458,6 +552,65 @@ contract DNNTDE {
         return true;
     }
 
+    /////////////////////////////////////
+    // @des Issue trickle down bonuses //
+    /////////////////////////////////////
+    function releaseTrickleDownBonuses()
+      internal
+    {
+
+      // Determine which token allocation we should be deducting from
+      DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.TDESupplyAllocation;
+
+      // Iteration Count
+      uint256 iteration = 0;
+
+      // Amount of additional tokens
+      uint256 addedTokens = 0;
+
+      if (bonusRangeOneAddressCount > 0) {
+          for (iteration=0; iteration < bonusRangeOneAddressCount; iteration++) {
+              addedTokens = ETHContributorTokens[bonusRangeOne[iteration]].mul(30).div(100);
+              ETHContributorTokens[bonusRangeOne[iteration]] = ETHContributorTokens[bonusRangeOne[iteration]].add(addedTokens);
+              if (!dnnToken.issueTokens(bonusRangeOne[iteration], addedTokens, allocationType)) {
+                  revert();
+              }
+          }
+      }
+
+      if (bonusRangeTwoAddressCount > 0) {
+          for (iteration=0; iteration < bonusRangeTwoAddressCount; iteration++) {
+              addedTokens = ETHContributorTokens[bonusRangeTwo[iteration]].mul(15).div(100);
+              ETHContributorTokens[bonusRangeTwo[iteration]] = ETHContributorTokens[bonusRangeTwo[iteration]].add(addedTokens);
+              if (!dnnToken.issueTokens(bonusRangeTwo[iteration], addedTokens, allocationType)) {
+                  revert();
+              }
+          }
+      }
+
+      if (bonusRangeThreeAddressCount > 0) {
+          for (iteration=0; iteration < bonusRangeThreeAddressCount; iteration++) {
+              addedTokens = ETHContributorTokens[bonusRangeThree[iteration]].mul(5).div(100);
+              ETHContributorTokens[bonusRangeThree[iteration]] = ETHContributorTokens[bonusRangeThree[iteration]].add(addedTokens);
+              if (!dnnToken.issueTokens(bonusRangeThree[iteration], addedTokens, allocationType)) {
+                  revert();
+              }
+          }
+      }
+
+      if (bonusRangeFourAddressCount > 0) {
+          for (iteration=0; iteration < bonusRangeFourAddressCount; iteration++) {
+              addedTokens = ETHContributorTokens[bonusRangeFour[iteration]].mul(100).div(100);
+              ETHContributorTokens[bonusRangeFour[iteration]] = ETHContributorTokens[bonusRangeFour[iteration]].add(addedTokens);
+              if (!dnnToken.issueTokens(bonusRangeFour[iteration], addedTokens, allocationType)) {
+                  revert();
+              }
+          }
+      }
+
+      trickleDownBonusesReleased = true;
+
+    }
 
     /////////////////////////////////
     // @des Marks TDE as completed //
@@ -469,6 +622,9 @@ contract DNNTDE {
         // Check if the tokens are locked and all pre-sale tokens have been
         // transferred to the TDE Supply before unlocking tokens.
         require(dnnToken.tokensLocked() == true && dnnToken.PRETDESupplyRemaining() == 0);
+
+        // Release Bonuses
+        releaseTrickleDownBonuses();
 
         // Unlock tokens
         dnnToken.unlockTokens();
@@ -512,8 +668,11 @@ contract DNNTDE {
         // Set DNN holding address
         dnnHoldingMultisig = dnnHolding;
 
-        // Set Hard Cap
+        // Set hard cap
         maximumFundingGoalInETH = hardCap * 1 ether;
+
+        // Range ETH
+        rangeETHAmount = hardCap.div(bonusRangeCount) * 1 ether;
 
         // Set Start Date
         TDEStartDate = startDate >= now ? startDate : now;
