@@ -90,20 +90,14 @@ contract DNNTDE {
     uint256 public rangeETHAmount = 0;
     uint256 public bonusRangeCount = 4;
 
+    uint256 public TDEContributorCount = 0;
+    mapping(uint256 => address) public TDEContributorAddresses;
+    mapping(address => uint256) public TDEContributorInitialBonusByAddress;
+
     uint256 public tokensIssuedForBonusRangeOne    = 0;
     uint256 public tokensIssuedForBonusRangeTwo    = 0;
     uint256 public tokensIssuedForBonusRangeThree  = 0;
     uint256 public tokensIssuedForBonusRangeFour   = 0;
-
-    uint256 public bonusRangeOneAddressCount   = 0;
-    uint256 public bonusRangeTwoAddressCount   = 0;
-    uint256 public bonusRangeThreeAddressCount = 0;
-    uint256 public bonusRangeFourAddressCount  = 0;
-
-    mapping(uint256 => address) bonusRangeOne;   // 20%
-    mapping(uint256 => address) bonusRangeTwo;   // 15%
-    mapping(uint256 => address) bonusRangeThree; // 10%
-    mapping(uint256 => address) bonusRangeFour;  // 5%
 
     //////////////////////////////////////////////////////
     // Checks if trickle down bonuses not been released //
@@ -183,10 +177,10 @@ contract DNNTDE {
     }
 
     ///////////////////////////////////////////////////////////////
-    // Make sure max cap is not exceeded with added contribution //
+    // Make sure max tokens is not exceeded with added contribution //
     ///////////////////////////////////////////////////////////////
-    modifier TDETokensLeft() {
-       uint256 tokensDistributedPlusBonuses = tokensIssuedForBonusRangeOne.mul(150).div(100) + tokensIssuedForBonusRangeTwo.mul(130).div(100) + tokensIssuedForBonusRangeThree.mul(115).div(100) + tokensIssuedForBonusRangeFour.mul(105).div(100);
+    modifier TDEBonusesDoesNotCauseTokenExceedance() {
+       uint256 tokensDistributedPlusBonuses = getTokensDistributedPlusTrickleDownBonuses();
        require (tokensDistributedPlusBonuses < dnnToken.TDESupplyRemaining());
        _;
     }
@@ -225,6 +219,16 @@ contract DNNTDE {
         onlyCofounderB
     {
         cofounderB = newAddress;
+    }
+
+    /////////////////////////////////////////////////////////
+    //  @des Tokens distributed plus trickle down bonuses. //
+    /////////////////////////////////////////////////////////
+    function getTokensDistributedPlusTrickleDownBonuses()
+        constant
+        returns (uint256)
+    {
+        return tokensIssuedForBonusRangeOne.mul(220).div(100) + tokensIssuedForBonusRangeTwo.mul(190).div(100) + tokensIssuedForBonusRangeThree.mul(150).div(100) + tokensIssuedForBonusRangeFour.mul(100).div(100);
     }
 
     ////////////////////////////////////////
@@ -349,15 +353,15 @@ contract DNNTDE {
         }
         // Bonus Two --> 25% - 50% of raise
         else if (tdeFundsRaisedInWei > rangeETHAmount && tdeFundsRaisedInWei <= rangeETHAmount.mul(2)) {
-            return tokenExchangeRateBase.mul(115).div(100);
+            return tokenExchangeRateBase.mul(130).div(100);
         }
         // Bonus Three --> 50% - 75% of raise
         else if (tdeFundsRaisedInWei > rangeETHAmount.mul(2) && tdeFundsRaisedInWei <= rangeETHAmount.mul(3)) {
-            return tokenExchangeRateBase.mul(110).div(100);
+            return tokenExchangeRateBase.mul(140).div(100);
         }
         // Bonus Four --> 75% - 100% of raise
         else if (tdeFundsRaisedInWei > rangeETHAmount.mul(3) && tdeFundsRaisedInWei <= maximumFundingGoalInETH) {
-            return tokenExchangeRateBase.mul(105).div(100);
+            return tokenExchangeRateBase.mul(150).div(100);
         }
         else {
             return tokenExchangeRateBase;
@@ -402,7 +406,6 @@ contract DNNTDE {
         constant
         returns (uint256)
     {
-
         // Compute how many atto-DNN user is entitled to.
         uint256 computedTokensForPurchase = weiamount.mul(timestamp >= TDEStartDate ? getTDETokenExchangeRate(timestamp) : getPRETDETokenExchangeRate(weiamount));
 
@@ -421,39 +424,69 @@ contract DNNTDE {
         internal
         ContributionIsAtLeastMinimum
         ContributionDoesNotCauseGoalExceedance
-        TDETokensLeft
+        TDEBonusesDoesNotCauseTokenExceedance
         returns (bool)
     {
         // Determine how many tokens should be issued
         uint256 tokenCount = calculateTokens(msg.value, now);
 
-        // Before adding the contributor to a bonus range
-        // make sure that this is the first time they have contributed
-        if (ETHContributorTokens[msg.sender] == 0) {
-            // Bonus One
-            if (tdeFundsRaisedInWei <= rangeETHAmount) {
-                tokensIssuedForBonusRangeOne = tokensIssuedForBonusRangeOne.add(tokenCount);
-                bonusRangeOne[bonusRangeOneAddressCount] = msg.sender;
-                bonusRangeOneAddressCount = bonusRangeOneAddressCount.add(1);
+         // Bonus Four
+        if (tdeFundsRaisedInWei > rangeETHAmount.mul(3) && tdeFundsRaisedInWei <= maximumFundingGoalInETH) {
+            if (TDEContributorInitialBonusByAddress[msg.sender] == 0) {
+                TDEContributorInitialBonusByAddress[msg.sender] = tdeFundsRaisedInWei;
+                TDEContributorAddresses[TDEContributorCount] = msg.sender;
+                TDEContributorCount++;
             }
-            // Bonus Two
-            else if (tdeFundsRaisedInWei > rangeETHAmount && tdeFundsRaisedInWei <= rangeETHAmount.mul(2)) {
-                tokensIssuedForBonusRangeTwo = tokensIssuedForBonusRangeTwo.add(tokenCount);
-                bonusRangeTwo[bonusRangeTwoAddressCount] = msg.sender;
-                bonusRangeTwoAddressCount = bonusRangeTwoAddressCount.add(1);
+        }
+        // Bonus Three
+        else if (tdeFundsRaisedInWei > rangeETHAmount.mul(2) && tdeFundsRaisedInWei <= rangeETHAmount.mul(3)) {
+            if (TDEContributorInitialBonusByAddress[msg.sender] == 0) {
+                TDEContributorInitialBonusByAddress[msg.sender] = rangeETHAmount.mul(3);
+                TDEContributorAddresses[TDEContributorCount] = msg.sender;
+                TDEContributorCount++;
             }
-            // Bonus Three
-            else if (tdeFundsRaisedInWei > rangeETHAmount.mul(2) && tdeFundsRaisedInWei <= rangeETHAmount.mul(3)) {
-                tokensIssuedForBonusRangeThree = tokensIssuedForBonusRangeThree.add(tokenCount);
-                bonusRangeThree[bonusRangeThreeAddressCount] = msg.sender;
-                bonusRangeThreeAddressCount = bonusRangeThreeAddressCount.add(1);
+        }
+        // Bonus Two
+        else if (tdeFundsRaisedInWei > rangeETHAmount && tdeFundsRaisedInWei <= rangeETHAmount.mul(2)) {
+            if (TDEContributorInitialBonusByAddress[msg.sender] == 0) {
+                TDEContributorInitialBonusByAddress[msg.sender] = rangeETHAmount.mul(2);
+                TDEContributorAddresses[TDEContributorCount] = msg.sender;
+                TDEContributorCount++;
             }
-            // Bonus Four
-            else if (tdeFundsRaisedInWei > rangeETHAmount.mul(3) && tdeFundsRaisedInWei <= maximumFundingGoalInETH) {
-                tokensIssuedForBonusRangeFour = tokensIssuedForBonusRangeFour.add(tokenCount);
-                bonusRangeFour[bonusRangeFourAddressCount] = msg.sender;
-                bonusRangeFourAddressCount = bonusRangeFourAddressCount.add(1);
+        }
+        // Bonus One
+        else if (tdeFundsRaisedInWei <= rangeETHAmount) {
+            if (TDEContributorInitialBonusByAddress[msg.sender] == 0) {
+                TDEContributorInitialBonusByAddress[msg.sender] = rangeETHAmount;
+                TDEContributorAddresses[TDEContributorCount] = msg.sender;
+                TDEContributorCount++;
             }
+        }
+
+        // Keep track of tokens issued within each range
+        // Bonus Four
+        if (TDEContributorInitialBonusByAddress[msg.sender] == tdeFundsRaisedInWei) {
+            tokensIssuedForBonusRangeFour = tokensIssuedForBonusRangeFour.add(tokenCount);
+        }
+        // Bonus Three
+        else if (TDEContributorInitialBonusByAddress[msg.sender] == rangeETHAmount.mul(3)) {
+            tokensIssuedForBonusRangeThree = tokensIssuedForBonusRangeThree.add(tokenCount);
+        }
+        // Bonus Two
+        else if (TDEContributorInitialBonusByAddress[msg.sender] == rangeETHAmount.mul(2)) {
+            tokensIssuedForBonusRangeTwo = tokensIssuedForBonusRangeTwo.add(tokenCount);
+        }
+        // Bonus One
+        else if (TDEContributorInitialBonusByAddress[msg.sender] == rangeETHAmount) {
+            tokensIssuedForBonusRangeOne = tokensIssuedForBonusRangeOne.add(tokenCount);
+        }
+
+        // Get total tokens distributed plus bonuses
+        uint256 tokensDistributedPlusBonuses = getTokensDistributedPlusTrickleDownBonuses();
+
+        // Make sure we have enough tokens to satisfy the transaction
+        if (tokensDistributedPlusBonuses > dnnToken.TDESupplyRemaining()) {
+            revert();
         }
 
         // Update total amount of tokens distributed (in atto-DNN)
@@ -518,6 +551,62 @@ contract DNNTDE {
           return issuePRETDETokens(beneficiary);
       }
 
+      ////////////////////////////////////////////////////////////////////////////////////////////
+      // @des Issues tokens for users who made purchase without using ETH during public sale.   //
+      // @param beneficiary Address the tokens will be issued to.                               //
+      // @param weiamount ETH amount (in Wei)                                                   //
+      ////////////////////////////////////////////////////////////////////////////////////////////
+      function buyTDETokensWithoutETH(address beneficiary, uint256 weiamount, uint256 tokenCount)
+          onlyCofounders
+          returns (bool)
+      {
+            // Get total tokens distributed plus bonuses
+            uint256 tokensDistributedPlusBonuses = tokenCount.add(getTokensDistributedPlusTrickleDownBonuses());
+
+            // Make sure we have enough tokens to satisfy the transaction
+            if (tokensDistributedPlusBonuses > dnnToken.TDESupplyRemaining()) {
+                revert();
+            }
+
+            // Keep track of how much tokens are issued to each contributor
+            ETHContributorTokens[beneficiary] = ETHContributorTokens[beneficiary].add(tokenCount);
+
+            // Keep track of contributions (in Wei)
+            ETHContributions[beneficiary] = ETHContributions[beneficiary].add(weiamount);
+
+            // Increase total funds raised by contribution
+            fundsRaisedInWei = fundsRaisedInWei.add(weiamount);
+
+            // Keep track of tde funds in addition, separately
+            tdeFundsRaisedInWei = tdeFundsRaisedInWei.add(weiamount);
+
+            // Send tokens to contibutor
+            return issueTDETokens(beneficiary, tokenCount);
+        }
+
+      ///////////////////////////////////////////////////////////////
+      // @des Issues bulk token purchases                          //
+      // @param beneficiary Address the tokens will be issued to.  //
+      ///////////////////////////////////////////////////////////////
+      function issueTDETokens(address beneficiary, uint256 tokenCount)
+          internal
+          returns (bool)
+      {
+
+          // Update total amount of tokens distributed (in atto-DNN)
+          tokensDistributed = tokensDistributed.add(tokenCount);
+
+          // Allocation type will be PRETDESupplyAllocation
+          DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.TDESupplyAllocation;
+
+          // Attempt to issue tokens
+          if (!dnnToken.issueTokens(beneficiary, tokenCount, allocationType)) {
+              revert();
+          }
+
+          return true;
+      }
+
     ///////////////////////////////////////////////////////////////
     // @des Issues pending tokens to pre-tde contributor         //
     // @param beneficiary Address the tokens will be issued to.  //
@@ -528,7 +617,6 @@ contract DNNTDE {
         HasPendingPRETDETokens(beneficiary)
         returns (bool)
     {
-
         // Amount of tokens to credit pre-tde contributor
         uint256 tokenCount = PRETDEContributorTokensPendingRelease[beneficiary];
 
@@ -556,60 +644,94 @@ contract DNNTDE {
     // @des Issue trickle down bonuses //
     /////////////////////////////////////
     function releaseTrickleDownBonuses()
-      internal
+      onlyCofounders
     {
+        // Issue trickle down bonuses if we have not already done so
+        if (trickleDownBonusesReleased == false) {
 
-      // Determine which token allocation we should be deducting from
-      DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.TDESupplyAllocation;
+            // Determine which token allocation we should be deducting from
+            DNNToken.DNNSupplyAllocations allocationType = DNNToken.DNNSupplyAllocations.TDESupplyAllocation;
 
-      // Iteration Count
-      uint256 iteration = 0;
+            // Temporary reference to contribution
+            address contributorAddress;
 
-      // Amount of additional tokens
-      uint256 addedTokens = 0;
+            // Temporary reference to contributor bonus tokens
+            uint256 bonusTokens;
 
-      if (bonusRangeOneAddressCount > 0) {
-          for (iteration=0; iteration < bonusRangeOneAddressCount; iteration++) {
-              addedTokens = ETHContributorTokens[bonusRangeOne[iteration]].mul(30).div(100);
-              ETHContributorTokens[bonusRangeOne[iteration]] = ETHContributorTokens[bonusRangeOne[iteration]].add(addedTokens);
-              if (!dnnToken.issueTokens(bonusRangeOne[iteration], addedTokens, allocationType)) {
-                  revert();
-              }
-          }
-      }
+            // Iterate through contributors
+            for (uint256 iteration=0; iteration < TDEContributorCount; iteration++) {
 
-      if (bonusRangeTwoAddressCount > 0) {
-          for (iteration=0; iteration < bonusRangeTwoAddressCount; iteration++) {
-              addedTokens = ETHContributorTokens[bonusRangeTwo[iteration]].mul(15).div(100);
-              ETHContributorTokens[bonusRangeTwo[iteration]] = ETHContributorTokens[bonusRangeTwo[iteration]].add(addedTokens);
-              if (!dnnToken.issueTokens(bonusRangeTwo[iteration], addedTokens, allocationType)) {
-                  revert();
-              }
-          }
-      }
+                // No bonus tokens to issue until contribute range and funds raised
+                // are determined.
+                bonusTokens = 0;
 
-      if (bonusRangeThreeAddressCount > 0) {
-          for (iteration=0; iteration < bonusRangeThreeAddressCount; iteration++) {
-              addedTokens = ETHContributorTokens[bonusRangeThree[iteration]].mul(5).div(100);
-              ETHContributorTokens[bonusRangeThree[iteration]] = ETHContributorTokens[bonusRangeThree[iteration]].add(addedTokens);
-              if (!dnnToken.issueTokens(bonusRangeThree[iteration], addedTokens, allocationType)) {
-                  revert();
-              }
-          }
-      }
+                // If we have at least reached the bonus 2 range, issue bonuses to everyone in bonus 1
+                if (tdeFundsRaisedInWei > rangeETHAmount && tdeFundsRaisedInWei <= rangeETHAmount.mul(2)) {
 
-      if (bonusRangeFourAddressCount > 0) {
-          for (iteration=0; iteration < bonusRangeFourAddressCount; iteration++) {
-              addedTokens = ETHContributorTokens[bonusRangeFour[iteration]].mul(100).div(100);
-              ETHContributorTokens[bonusRangeFour[iteration]] = ETHContributorTokens[bonusRangeFour[iteration]].add(addedTokens);
-              if (!dnnToken.issueTokens(bonusRangeFour[iteration], addedTokens, allocationType)) {
-                  revert();
-              }
-          }
-      }
+                    // Contributor address to send tokens to
+                    contributorAddress = TDEContributorAddresses[iteration];
 
-      trickleDownBonusesReleased = true;
+                    // Issue a range 2 bonus if the contributor was in range 1
+                    if (TDEContributorInitialBonusByAddress[contributorAddress] == rangeETHAmount) {
+                        bonusTokens = ETHContributorTokens[contributorAddress].mul(130).div(100).sub(ETHContributorTokens[contributorAddress]);
+                    }
 
+                    // Issue tokens to contributor address if bonus applies
+                    if (bonusTokens > 0 && !dnnToken.issueTokens(contributorAddress, bonusTokens, allocationType)) {
+                        revert();
+                    }
+                }
+
+                // If we have at least reached the bonus 3 range, issue bonuses to everyone in bonus 1 & 2
+                else if (tdeFundsRaisedInWei > rangeETHAmount.mul(2) && tdeFundsRaisedInWei <= rangeETHAmount.mul(3)) {
+
+                    // Contributor address to send tokens to
+                    contributorAddress = TDEContributorAddresses[iteration];
+
+                    // Issue a range 2 and range 3 bonus if the contributor was in range 1
+                    if (TDEContributorInitialBonusByAddress[contributorAddress] == rangeETHAmount) {
+                        bonusTokens = ETHContributorTokens[contributorAddress].mul(170).div(100).sub(ETHContributorTokens[contributorAddress]);
+                    }
+                    // Issue a range 3 bonus if the contributor was in range 2
+                    else if (TDEContributorInitialBonusByAddress[contributorAddress] == rangeETHAmount.mul(2)) {
+                        bonusTokens = ETHContributorTokens[contributorAddress].mul(140).div(100).sub(ETHContributorTokens[contributorAddress]);
+                    }
+
+                    // Issue tokens to contributor address if bonus applies
+                    if (bonusTokens > 0 && !dnnToken.issueTokens(contributorAddress, bonusTokens, allocationType)) {
+                        revert();
+                    }
+                }
+
+                // If we have at least reached the bonus 4 range, issue bonuses to everyone in bonus 1, 2, & 3
+                else if (tdeFundsRaisedInWei > rangeETHAmount.mul(3)) {
+
+                    // Contributor address to send tokens to
+                    contributorAddress = TDEContributorAddresses[iteration];
+
+                    // Issue a range 2 and range 3 bonus if the contributor was in range 1
+                    if (TDEContributorInitialBonusByAddress[contributorAddress] == rangeETHAmount) {
+                        bonusTokens = ETHContributorTokens[contributorAddress].mul(220).div(100).sub(ETHContributorTokens[contributorAddress]);
+                    }
+                    // Issue a range 3 bonus if the contributor was in range 2
+                    else if (TDEContributorInitialBonusByAddress[contributorAddress] == rangeETHAmount.mul(2)) {
+                        bonusTokens = ETHContributorTokens[contributorAddress].mul(190).div(100).sub(ETHContributorTokens[contributorAddress]);
+                    }
+                    // Issue a range 3 bonus if the contributor was in range 2
+                    else if (TDEContributorInitialBonusByAddress[contributorAddress] == rangeETHAmount.mul(3)) {
+                        bonusTokens = ETHContributorTokens[contributorAddress].mul(150).div(100).sub(ETHContributorTokens[contributorAddress]);
+                    }
+
+                    // Issue tokens to contributor address if bonus applies
+                    if (bonusTokens > 0 && !dnnToken.issueTokens(contributorAddress, bonusTokens, allocationType)) {
+                        revert();
+                    }
+                }
+            }
+
+            // Mark down that bonuses have been released
+            trickleDownBonusesReleased = true;
+        }
     }
 
     /////////////////////////////////

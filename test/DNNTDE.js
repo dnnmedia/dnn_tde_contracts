@@ -55,7 +55,74 @@ contract("DNNTDE", function(accounts) {
       let AdvisorySupplyAllocation = 5;
       let PlatformSupplyAllocation = 6;
 
-      it("function() + buyTokens(): Test trickle down bonuses", async () => {
+      it("function() + buyTokens(): Custom Bonuses", async () => {
+
+            // Deploy new token contract
+            const token = await DNNToken.new(cofounderA, cofounderB, platform, 0, {from: multisig, gas: gasAmount});
+
+            // Deploy new tde contract
+            const tde = await DNNTDE.new(token.address, cofounderA, cofounderB, multisig, 10, 0, 0, {from: multisig, gas: gasAmount});
+
+            // Set allocator
+            await token.changeCrowdfundContract(tde.address, {from: cofounderA, gas: gasAmount});
+
+            // Attempt to manually buy tokens within the cap
+            await tde.buyTDETokensWithoutETH(buyer_address, ETHToWei(10), ETHToWei(1000000), {from: cofounderA, gas: gasAmount});
+
+            // End PreTDE
+            await tde.finalizePRETDE({from: cofounderA, gas: gasAmount});
+
+            // End TDE
+            await tde.finalizeTDE({from: cofounderA, gas: gasAmount});
+
+            // Check if bonuses were released
+            let trickleDownBonusesReleased = await tde.trickleDownBonusesReleased.call({from: cofounderA, gas: gasAmount});
+            assert.equal(trickleDownBonusesReleased, true, "Trickle down bonuses should have been released");
+
+            // Check if trickle down bonus was applied correctly
+            let buyer_balance = await token.balanceOf.call(buyer_address, {from: cofounderA, gas: gasAmount});
+            assert.equal(WeiToETH(buyer_balance), 1000000, "The token balance with the additional bounus 1000000");
+      });
+
+      it("function() + buyTokens(): Test trickle down bonuses with a single user", async () => {
+
+            // Deploy new token contract
+            const token = await DNNToken.new(cofounderA, cofounderB, platform, 0, {from: multisig, gas: gasAmount});
+
+            // Deploy new tde contract
+            const tde = await DNNTDE.new(token.address, cofounderA, cofounderB, multisig, 40, 0, 0, {from: multisig, gas: gasAmount});
+
+            // Set allocator
+            await token.changeCrowdfundContract(tde.address, {from: cofounderA, gas: gasAmount});
+
+            // End PreTDE
+            await tde.finalizePRETDE({from: cofounderA, gas: gasAmount});
+
+            // Buy DNN
+            await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("1", "Ether")});
+
+            // Buy DNN
+            await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("1", "Ether")});
+
+            // Buy DNN
+            await web3.eth.sendTransaction({from: cofounderA, to: tde.address, gas: gasAmount, value: web3.toWei("30", "Ether")});
+
+            // Buy DNN
+            await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("8", "Ether")});
+
+            // End PreTDE
+            await tde.finalizeTDE({from: cofounderA, gas: gasAmount});
+
+            // Check if bonuses were released
+            let trickleDownBonusesReleased = await tde.trickleDownBonusesReleased.call({from: cofounderA, gas: gasAmount});
+            assert.equal(trickleDownBonusesReleased, true, "Trickle down bonuses should have been released");
+
+            // Check if trickle down bonus was applied correctly
+            let buyer_address_balance = await token.balanceOf.call(buyer_address, {from: cofounderA, gas: gasAmount});
+            assert.equal(WeiToETH(buyer_address_balance), 95040, "The token balance with the additional bounus 95040");
+      });
+
+      it("function() + buyTokens(): Test trickle down bonuses with multiple users", async () => {
 
             // Deploy new token contract
             const token = await DNNToken.new(cofounderA, cofounderB, platform, 0, {from: multisig, gas: gasAmount});
@@ -85,42 +152,26 @@ contract("DNNTDE", function(accounts) {
             let tokensIssuedForBonusRangeOne = await tde.tokensIssuedForBonusRangeOne.call({from: cofounderA, gas: gasAmount});
             assert.equal(WeiToETH(tokensIssuedForBonusRangeOne), 10800, "Tokens issued for bonus range one is 10800");
 
-            // First bonus address count
-            let bonusRangeOneAddressCount = await tde.bonusRangeOneAddressCount.call({from: cofounderA, gas: gasAmount});
-            assert.equal(bonusRangeOneAddressCount, 1, "A single person contributed to bonus range one");
-
             // Buy DNN
             await web3.eth.sendTransaction({from: multisig, to: tde.address, gas: gasAmount, value: web3.toWei("2", "Ether")});
 
             // Tokens issued for second bonus range
             let tokensIssuedForBonusRangeTwo = await tde.tokensIssuedForBonusRangeTwo.call({from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(tokensIssuedForBonusRangeTwo), 6900, "Tokens issued for bonus range two is 6900");
-
-            // Second bonus address count
-            let bonusRangeTwoAddressCount = await tde.bonusRangeTwoAddressCount.call({from: cofounderA, gas: gasAmount});
-            assert.equal(bonusRangeTwoAddressCount, 1, "A single person contributed to bonus range two");
+            assert.equal(WeiToETH(tokensIssuedForBonusRangeTwo), 7800, "Tokens issued for bonus range two is 7800");
 
             // Buy DNN
             await web3.eth.sendTransaction({from: cofounderA, to: tde.address, gas: gasAmount, value: web3.toWei("3", "Ether")});
 
             // Tokens issued for third bonus range
             let tokensIssuedForBonusRangeThree = await tde.tokensIssuedForBonusRangeThree.call({from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(tokensIssuedForBonusRangeThree), 9900, "Tokens issued for bonus range three is 9900");
-
-            // Third bonus address count
-            let bonusRangeThreeAddressCount = await tde.bonusRangeThreeAddressCount.call({from: cofounderA, gas: gasAmount});
-            assert.equal(bonusRangeThreeAddressCount, 1, "A single person contributed to bonus range three");
+            assert.equal(WeiToETH(tokensIssuedForBonusRangeThree), 12600, "Tokens issued for bonus range three is 12600");
 
             // Buy DNN
             await web3.eth.sendTransaction({from: cofounderB, to: tde.address, gas: gasAmount, value: web3.toWei("2", "Ether")});
 
             // Tokens issued for fourth bonus range
             let tokensIssuedForBonusRangeFour = await tde.tokensIssuedForBonusRangeFour.call({from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(tokensIssuedForBonusRangeFour), 6300, "Tokens issued for bonus range four is 6300");
-
-            // Fourth bonus address count
-            let bonusRangeFourAddressCount = await tde.bonusRangeFourAddressCount.call({from: cofounderA, gas: gasAmount});
-            assert.equal(bonusRangeFourAddressCount, 1, "A single person contributed to bonus range four");
+            assert.equal(WeiToETH(tokensIssuedForBonusRangeFour), 9000, "Tokens issued for bonus range four is 9000");
 
             // End PreTDE
             await tde.finalizePRETDE({from: cofounderA, gas: gasAmount});
@@ -134,20 +185,19 @@ contract("DNNTDE", function(accounts) {
 
             // Check if trickle down bonus was applied correctly
             let buyer_address_balance = await token.balanceOf.call(buyer_address, {from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(buyer_address_balance), 14040, "The token balance with the additional bounus 14040");
+            assert.equal(WeiToETH(buyer_address_balance), 23760, "The token balance with the additional bounus 23760");
 
             // Check if trickle down bonus was applied correctly
-            let multisig_balance = await token.balanceOf.call(buyer_address, {from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(multisig_balance), 7935, "The token balance with the additional bounus 7935");
+            let multisig_balance = await token.balanceOf.call(multisig, {from: cofounderA, gas: gasAmount});
+            assert.equal(WeiToETH(multisig_balance), 14820, "The token balance with the additional bounus 14820");
 
             // Check if trickle down bonus was applied correctly
-            let cofounderA_balance = await token.balanceOf.call(buyer_address, {from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(cofounderA_balance), 10395, "The token balance with the additional bounus 14040");
+            let cofounderA_balance = await token.balanceOf.call(cofounderA, {from: cofounderA, gas: gasAmount});
+            assert.equal(WeiToETH(cofounderA_balance), 18900, "The token balance with the additional bounus 18900");
 
             // Check if trickle down bonus was applied correctly
-            let cofounderB_balance = await token.balanceOf.call(buyer_address, {from: cofounderA, gas: gasAmount});
-            assert.equal(WeiToETH(cofounderB_balance), 6300, "The token balance with the additional bounus 14040");
-
+            let cofounderB_balance = await token.balanceOf.call(cofounderB, {from: cofounderA, gas: gasAmount});
+            assert.equal(WeiToETH(cofounderB_balance), 9000, "The token balance with the additional bounus 9000");
       });
 
       it("extendPRETDE(): Test extending presale", async () => {
@@ -518,7 +568,7 @@ contract("DNNTDE", function(accounts) {
 
       });
 
-      it("function() + buyTokens(): accepts 1 ETH in exchange for DNN tokens during TDE at varies raises", async () =>  {
+      it("function() + buyTokens(): accepts 1 ETH in exchange for DNN tokens during TDE at various raises", async () =>  {
 
             // Deploy new token contract
             const token = await DNNToken.new(cofounderA, cofounderB, platform, TDEStartDate, {from: multisig, gas: gasAmount});
@@ -540,30 +590,30 @@ contract("DNNTDE", function(accounts) {
            const buyerA_balance_two = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
            assert.equal(WeiToETH(buyerA_balance_two), 10800, "The buyer should start with a 10800 token balance");
 
-           // Send more to reach next token rate --> 15%
+           // Send more to reach next token rate --> 30%
            await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("2", "Ether")});
 
-           // Check balance after second token purchase --> 15%
+           // Check balance after second token purchase --> 30%
            const buyerA_balance_three = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(buyerA_balance_three), 17700, "The buyer should have an additional 17700 tokens");
+           assert.equal(WeiToETH(buyerA_balance_three), 18600, "The buyer should have an additional 18600 tokens");
 
-           // Buy tokens at next token rate 10%
+           // Buy tokens at next token rate 40%
            await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("3", "Ether")});
 
-           // Check balance after third token purchase 10%
+           // Check balance after third token purchase 40%
            const buyerA_balance_four = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(buyerA_balance_four), 27600, "The buyer have an additional 27600 tokens");
+           assert.equal(WeiToETH(buyerA_balance_four), 31200, "The buyer have an additional 31200 tokens");
 
-           // Buy tokens at next token rate 5%
+           // Buy tokens at next token rate 50%
            await web3.eth.sendTransaction({from: buyer_address, to: tde.address, gas: gasAmount, value: web3.toWei("2", "Ether")});
 
-           // Check balance after third token purchase 5%
+           // Check balance after third token purchase 50%
            const buyerA_balance_five = await token.balanceOf.call(buyer_address, {from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(buyerA_balance_five), 33900, "The buyer have an additional 33900 tokens");
+           assert.equal(WeiToETH(buyerA_balance_five), 40200, "The buyer have an additional 40200 tokens");
 
           // Check total tokens distributed from contract
            const tokensDistributed = await tde.tokensDistributed.call({from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(tokensDistributed), 33900, "The total tokens distributed should be 33900");
+           assert.equal(WeiToETH(tokensDistributed), 40200, "The total tokens distributed should be 40200");
 
            // Check buyer's total ETH contribution balance
            const buyerA_ETH_contribution = await tde.contributorETHBalance.call(buyer_address, {from: buyer_address, gas: gasAmount});
@@ -575,7 +625,7 @@ contract("DNNTDE", function(accounts) {
 
            // Check if available TDE supply has been properly reduced
            const TDESupplyRemaining = await token.TDESupplyRemaining.call({from: buyer_address, gas: gasAmount});
-           assert.equal(WeiToETH(TDESupplyRemaining), 399966100, "Remaining TDE balance should be 399,966,100 tokens");
+           assert.equal(WeiToETH(TDESupplyRemaining), 399959800, "Remaining TDE balance should be 399959800 tokens");
 
       });
 
